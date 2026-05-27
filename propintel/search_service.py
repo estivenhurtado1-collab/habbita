@@ -47,9 +47,10 @@ def _search_metrocuadrado(criteria: SearchCriteria, session=None) -> list[Any]:
 
 def _passes_filters(prop: dict, criteria: SearchCriteria) -> bool:
     price = prop.get("price")
-    if criteria.price_min and price and price < criteria.price_min:
+    # Sin precio scrapeado: mostrar igual (evita vaciar resultados por precio incierto)
+    if criteria.price_min and price is not None and price < criteria.price_min:
         return False
-    if criteria.price_max and price and price > criteria.price_max:
+    if criteria.price_max and price is not None and price > criteria.price_max:
         return False
     if criteria.bathrooms and prop.get("bathrooms") and prop["bathrooms"] < criteria.bathrooms:
         return False
@@ -202,7 +203,11 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
                 if err:
                     errors[key] = err
                 total_rows += len(rows)
-                if search_fast_enabled() and total_rows >= criteria.max_results:
+                if (
+                    search_fast_enabled()
+                    and total_rows >= portal_limit
+                    and not err
+                ):
                     break
 
     combined: List[dict] = []

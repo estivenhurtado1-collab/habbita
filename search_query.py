@@ -109,8 +109,12 @@ def listing_matches_bedrooms(listing: Listing, bedrooms: int) -> bool:
         rf"\b{bedrooms}\s*habs?\.",
         rf"\b{bedrooms}\s*hab(?:itaciones?)?\b",
         rf"unidades desde:\s*{bedrooms}\s*hab",
+        rf"{bedrooms}\s*habitacion",
     ]
-    return any(re.search(p, blob) for p in patterns)
+    if any(re.search(p, blob) for p in patterns):
+        return True
+    # Sin dato de habitaciones en la tarjeta: no descartar (el portal sí tiene el dato)
+    return True
 
 
 def listing_from_zone_urls(listing: Listing, zone_keys: List[str]) -> bool:
@@ -204,19 +208,21 @@ def search_listings(
     if matched:
         return matched[: criteria.max_results]
 
-    # Fallback: inmuebles de la zona correcta con las habitaciones pedidas
-    if criteria.zones and criteria.bedrooms is not None:
-        fallback = [
+    # Fallback: misma zona / tipo aunque el filtro de texto sea estricto
+    if collected and criteria.zones:
+        zone_only = [
             item
             for item in collected
-            if listing_from_zone_urls(item, criteria.zones)
-            and listing_matches_bedrooms(item, criteria.bedrooms)
+            if listing_matches_zone(item, criteria.zones)
             and (not criteria.property_type or listing_matches_type(item, criteria.property_type))
         ]
-        if fallback:
-            return fallback[: criteria.max_results]
+        if zone_only:
+            return zone_only[: criteria.max_results]
 
-    return matched[: criteria.max_results]
+    if collected:
+        return collected[: criteria.max_results]
+
+    return []
 
 
 def format_criteria_summary(criteria: SearchCriteria) -> str:

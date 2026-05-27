@@ -56,13 +56,45 @@ def new_browser_context(browser, *, block_media: bool | None = None):
 
 def goto_page(page, url: str, timeout: int | None = None) -> None:
     if timeout is None:
-        timeout = 14000 if is_low_memory() else 28000
-    page.goto(url, wait_until="commit", timeout=timeout)
+        timeout = 22000 if is_low_memory() else 40000
+    page.goto(url, wait_until="domcontentloaded", timeout=timeout)
 
 
 def brief_lazy_wait(page) -> None:
-    """Espera mínima para que lazy-load rellene data-src/src."""
-    page.wait_for_timeout(450 if is_low_memory() else 700)
+    """Espera mínima para que lazy-load y SPAs pinten las tarjetas."""
+    page.wait_for_timeout(900 if is_low_memory() else 1200)
+
+
+def ensure_listing_cards(page, selector: str) -> int:
+    """Espera tarjetas; hace scroll si la lista carga vacía (común en Render)."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    brief_lazy_wait(page)
+    try:
+        page.wait_for_selector(selector, timeout=selector_timeout())
+    except PlaywrightTimeoutError:
+        pass
+
+    count = page.locator(selector).count()
+    if count > 0:
+        return count
+
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000 if is_low_memory() else 15000)
+    except PlaywrightTimeoutError:
+        pass
+
+    count = page.locator(selector).count()
+    if count > 0:
+        return count
+
+    for _ in range(3 if is_low_memory() else 4):
+        page.mouse.wheel(0, 2000)
+        page.wait_for_timeout(scroll_pause_ms())
+        count = page.locator(selector).count()
+        if count > 0:
+            return count
+    return count
 
 
 def page_default_timeout() -> int:
@@ -70,7 +102,7 @@ def page_default_timeout() -> int:
 
 
 def selector_timeout() -> int:
-    return 8000 if is_low_memory() else 14000
+    return 14000 if is_low_memory() else 20000
 
 
 def scroll_pause_ms() -> int:
@@ -124,11 +156,12 @@ def search_parallel_enabled() -> bool:
 
 
 def search_fast_enabled() -> bool:
-    return os.getenv("SEARCH_FAST", "1").lower() in ("1", "true", "yes")
+    # Desactivado por defecto: no saltar el segundo portal si el primero falla o trae pocos
+    return os.getenv("SEARCH_FAST", "0").lower() in ("1", "true", "yes")
 
 
 def portal_wall_timeout_sec() -> int:
     try:
-        return max(18, int(os.getenv("SEARCH_PORTAL_TIMEOUT", "28")))
+        return max(25, int(os.getenv("SEARCH_PORTAL_TIMEOUT", "50")))
     except ValueError:
         return 28

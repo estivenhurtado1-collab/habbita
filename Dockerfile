@@ -8,8 +8,8 @@ ENV PYTHONUNBUFFERED=1 \
     PROPINTEL_DB=/data/propintel.db \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     LOW_MEMORY=1 \
-    SEARCH_FAST=1 \
-    SEARCH_PORTAL_TIMEOUT=26
+    SEARCH_FAST=0 \
+    SEARCH_PORTAL_TIMEOUT=50
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \

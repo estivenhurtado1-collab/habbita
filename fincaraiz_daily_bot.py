@@ -143,7 +143,7 @@ def extract_card_text(anchor) -> str:
 
 
 def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int | None) -> List[Listing]:
-    from scrapers.browser_utils import brief_lazy_wait, goto_page, selector_timeout
+    from scrapers.browser_utils import ensure_listing_cards, goto_page
     from scrapers.images import collect_listing_images, lookup_image
     from scrapers.prices import collect_listing_prices, lookup_price
 
@@ -156,12 +156,9 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
         current_url = url if page_idx == 1 else f"{url}/pagina{page_idx}"
         goto_page(page, current_url)
 
-        try:
-            page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=selector_timeout())
-        except PlaywrightTimeoutError:
+        if ensure_listing_cards(page, LISTING_LINK_SELECTOR) == 0:
             continue
 
-        brief_lazy_wait(page)
         img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
         price_map = collect_listing_prices(page, LISTING_LINK_SELECTOR)
 

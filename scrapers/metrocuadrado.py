@@ -21,15 +21,14 @@ from fincaraiz_daily_bot import (
     parse_price_value,
 )
 from scrapers.browser_utils import (
-    brief_lazy_wait,
     chromium_launch_kwargs,
+    ensure_listing_cards,
     goto_page,
     is_low_memory,
     new_browser_context,
     page_default_timeout,
     scroll_pause_ms,
     scroll_rounds_default,
-    selector_timeout,
 )
 from scrapers.images import collect_listing_images, extract_card_image, lookup_image
 from scrapers.prices import collect_listing_prices, lookup_price
@@ -190,18 +189,12 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
     goto_page(page, url)
     dismiss_cookie_banner(page)
 
-    try:
-        page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=selector_timeout())
-    except PlaywrightTimeoutError:
-        scroll_to_load_cards(page, min_links=max_listings)
-        if page.locator(LISTING_LINK_SELECTOR).count() == 0:
-            return []
+    link_count = ensure_listing_cards(page, LISTING_LINK_SELECTOR)
+    if link_count == 0:
+        return []
 
-    link_count = page.locator(LISTING_LINK_SELECTOR).count()
     if link_count < max_listings:
         scroll_to_load_cards(page, min_links=max_listings)
-
-    brief_lazy_wait(page)
     img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
     price_map = collect_listing_prices(page, LISTING_LINK_SELECTOR)
 
@@ -275,13 +268,14 @@ def listing_matches_metro(listing: Listing, criteria: SearchCriteria) -> bool:
 
     if criteria.bedrooms is not None:
         beds = listing.bedrooms or parse_bedrooms_from_url(listing.listing_url)
-        if beds is not None:
-            if beds != criteria.bedrooms:
-                return False
-        elif f"{criteria.bedrooms}-habitacion" not in blob and not re.search(
-            rf"\b{criteria.bedrooms}\s*hab", blob
-        ):
+        if beds is not None and beds != criteria.bedrooms:
             return False
+        if beds is None:
+            if f"{criteria.bedrooms}-habitacion" in blob or re.search(
+                rf"\b{criteria.bedrooms}\s*hab", blob
+            ):
+                pass
+            # Sin dato en tarjeta: no descartar
 
     if criteria.zones:
         if not any(
