@@ -3,9 +3,10 @@
     {% if p.image_url %}
     <img
       src="{{ p.image_url | image_display_url }}"
+      data-fallback="{{ p.image_url }}"
       alt="{{ p.title or 'Inmueble' }}"
       loading="lazy"
-      onerror="this.closest('.card-img').classList.add('placeholder-img'); this.remove();"
+      onerror="if(this.dataset.fallback&&!this.dataset.retried){this.dataset.retried=1;this.removeAttribute('src');this.src=this.dataset.fallback}else{this.closest('.card-img').classList.add('placeholder-img');this.remove()}"
     >
     {% endif %}
     <span class="portal-tag {{ p.portal }}">{{ p.portal }}</span>

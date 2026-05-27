@@ -21,6 +21,7 @@ from fincaraiz_daily_bot import (
     parse_price_value,
 )
 from scrapers.browser_utils import (
+    brief_lazy_wait,
     chromium_launch_kwargs,
     goto_page,
     is_low_memory,
@@ -30,7 +31,7 @@ from scrapers.browser_utils import (
     scroll_rounds_default,
     selector_timeout,
 )
-from scrapers.images import extract_card_image
+from scrapers.images import collect_listing_images, extract_card_image, lookup_image
 from search_query import KNOWN_ZONES, SearchCriteria
 
 BASE_URL = "https://www.metrocuadrado.com"
@@ -195,8 +196,12 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
         if page.locator(LISTING_LINK_SELECTOR).count() == 0:
             return []
 
-    if page.locator(LISTING_LINK_SELECTOR).count() < max_listings:
+    link_count = page.locator(LISTING_LINK_SELECTOR).count()
+    if link_count < max_listings:
         scroll_to_load_cards(page, min_links=max_listings)
+
+    brief_lazy_wait(page)
+    img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
 
     link_nodes = page.locator(LISTING_LINK_SELECTOR)
     seen: Set[str] = set()
@@ -229,7 +234,8 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
             bathrooms=bathrooms,
             area_m2=parse_area(card_text),
             source_text=card_text[:1200],
-            image_url=extract_card_image(anchor, BASE_URL),
+            image_url=lookup_image(img_map, listing_url, BASE_URL)
+            or extract_card_image(anchor, BASE_URL),
         )
         rows.append(row)
 
@@ -315,17 +321,4 @@ def search_listings(criteria: SearchCriteria, limit: int = 5, *, session=None) -
     matched = [item for item in collected if listing_matches_metro(item, effective)]
     if matched:
         return matched[:limit]
-
-    # Relajar habitaciones si hay pocos con filtro estricto
-    if effective.bedrooms is not None and effective.zones:
-        relaxed = SearchCriteria(
-            bedrooms=None,
-            zones=effective.zones,
-            property_type=effective.property_type,
-            max_results=limit,
-        )
-        matched = [item for item in collected if listing_matches_metro(item, relaxed)]
-        if matched:
-            return matched[:limit]
-
     return collected[:limit]

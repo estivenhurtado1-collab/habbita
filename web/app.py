@@ -108,25 +108,39 @@ async def proxy_image(u: str = Query("", alias="u")) -> Response:
         return Response(status_code=404)
 
     def fetch() -> tuple[bytes, str]:
-        resp = requests.get(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Referer": _referer_for_image(url),
-                "Accept": "image/*,*/*",
-            },
-            timeout=20,
-        )
-        resp.raise_for_status()
-        ctype = resp.headers.get("Content-Type", "image/jpeg").split(";")[0]
-        return resp.content, ctype
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": _referer_for_image(url),
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        }
+        last_exc: Exception | None = None
+        for referer in (headers["Referer"], "https://www.google.com/"):
+            try:
+                resp = requests.get(
+                    url,
+                    headers={**headers, "Referer": referer},
+                    timeout=12,
+                    allow_redirects=True,
+                )
+                resp.raise_for_status()
+                ctype = resp.headers.get("Content-Type", "image/jpeg").split(";")[0]
+                if not ctype.startswith("image/"):
+                    ctype = "image/jpeg"
+                return resp.content, ctype
+            except Exception as exc:
+                last_exc = exc
+        raise last_exc or RuntimeError("fetch failed")
 
     try:
         body, ctype = await asyncio.to_thread(fetch)
-        return Response(content=body, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+        return Response(
+            content=body,
+            media_type=ctype,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     except Exception:
         return Response(status_code=404)
 

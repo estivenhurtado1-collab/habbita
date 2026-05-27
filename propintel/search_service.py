@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout, as_completed
 from typing import Any, Dict, List
 
 from propintel.enrich import listing_to_property_dict
 from propintel.repository import upsert_property
-from scrapers.browser_utils import ScrapeSession, search_parallel_enabled
+from scrapers.browser_utils import (
+    ScrapeSession,
+    portal_wall_timeout_sec,
+    search_fast_enabled,
+    search_parallel_enabled,
+)
 from search.criteria import SearchCriteria, to_legacy
 
 logger = logging.getLogger(__name__)
@@ -116,6 +121,28 @@ def _run_portal_isolated(
         )
 
 
+def _run_portal_timed(
+    portal: str,
+    portal_criteria: SearchCriteria,
+    criteria: SearchCriteria,
+    portal_limit: int,
+) -> tuple[str, List[dict], str | None]:
+    timeout = portal_wall_timeout_sec()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(
+            _run_portal_isolated,
+            portal,
+            portal_criteria,
+            criteria,
+            portal_limit,
+        )
+        try:
+            return fut.result(timeout=timeout)
+        except FuturesTimeout:
+            logger.warning("Portal %s superó %ss", portal, timeout)
+            return portal, [], f"Tiempo agotado ({timeout}s)"
+
+
 def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, str]]:
     """Busca en cada portal y devuelve (lista plana, errores por portal)."""
     portal_limit = min(PER_PORTAL_LIMIT, criteria.max_results)
@@ -138,13 +165,16 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
     seen_fp: set[str] = set()
 
     active = [p for p in criteria.portals if p in ("fincaraiz", "metrocuadrado")]
+    active.sort(key=lambda p: 0 if p == "fincaraiz" else 1)
     parallel = search_parallel_enabled() and len(active) > 1
+    runner = _run_portal_timed if parallel else None
+    total_rows = 0
 
     if parallel:
         with ThreadPoolExecutor(max_workers=len(active)) as pool:
             futures = {
                 pool.submit(
-                    _run_portal_isolated,
+                    runner,
                     portal,
                     portal_criteria,
                     criteria,
@@ -171,6 +201,9 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
                 by_portal[key] = rows
                 if err:
                     errors[key] = err
+                total_rows += len(rows)
+                if search_fast_enabled() and total_rows >= criteria.max_results:
+                    break
 
     combined: List[dict] = []
     for portal in criteria.portals:

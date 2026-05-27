@@ -31,8 +31,8 @@ def chromium_launch_kwargs() -> dict[str, Any]:
 
 
 def _block_heavy(route) -> None:
-    # Bloquear descarga de imágenes (más rápido); image_url sale de src/data-src en el HTML
-    if route.request.resource_type in ("image", "media", "font"):
+    # No bloquear imágenes: muchos portales rellenan src con lazy-load al descargarlas
+    if route.request.resource_type in ("media", "font"):
         route.abort()
     else:
         route.continue_()
@@ -56,16 +56,21 @@ def new_browser_context(browser, *, block_media: bool | None = None):
 
 def goto_page(page, url: str, timeout: int | None = None) -> None:
     if timeout is None:
-        timeout = 22000 if is_low_memory() else 45000
-    page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        timeout = 14000 if is_low_memory() else 28000
+    page.goto(url, wait_until="commit", timeout=timeout)
+
+
+def brief_lazy_wait(page) -> None:
+    """Espera mínima para que lazy-load rellene data-src/src."""
+    page.wait_for_timeout(450 if is_low_memory() else 700)
 
 
 def page_default_timeout() -> int:
-    return 15000 if is_low_memory() else 30000
+    return 12000 if is_low_memory() else 22000
 
 
 def selector_timeout() -> int:
-    return 12000 if is_low_memory() else 20000
+    return 8000 if is_low_memory() else 14000
 
 
 def scroll_pause_ms() -> int:
@@ -110,4 +115,20 @@ class ScrapeSession(AbstractContextManager["ScrapeSession"]):
 
 
 def search_parallel_enabled() -> bool:
-    return os.getenv("SEARCH_PARALLEL", "").lower() in ("1", "true", "yes")
+    if os.getenv("SEARCH_SEQUENTIAL", "").lower() in ("1", "true", "yes"):
+        return False
+    if os.getenv("SEARCH_PARALLEL", "").lower() in ("1", "true", "yes"):
+        return True
+    # Paralelo por defecto fuera de modo low-memory (p. ej. local o plan 2GB)
+    return not is_low_memory()
+
+
+def search_fast_enabled() -> bool:
+    return os.getenv("SEARCH_FAST", "1").lower() in ("1", "true", "yes")
+
+
+def portal_wall_timeout_sec() -> int:
+    try:
+        return max(18, int(os.getenv("SEARCH_PORTAL_TIMEOUT", "28")))
+    except ValueError:
+        return 28

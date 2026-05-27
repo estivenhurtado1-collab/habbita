@@ -27,7 +27,7 @@ def upsert_property(data: dict[str, Any]) -> dict[str, Any]:
                     area_m2 = ?, bedrooms = ?, bathrooms = ?, parking = ?,
                     stratum = ?, score = ?, valorization_pct = ?,
                     analysis_text = ?, score_label = ?,
-                    image_url = COALESCE(?, image_url),
+                    image_url = COALESCE(NULLIF(?, ''), image_url),
                     updated_at = ?, is_active = 1
                 WHERE id = ?
                 """,

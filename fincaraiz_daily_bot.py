@@ -149,7 +149,8 @@ def extract_card_text(anchor) -> str:
 
 
 def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int | None) -> List[Listing]:
-    from scrapers.browser_utils import goto_page, selector_timeout
+    from scrapers.browser_utils import brief_lazy_wait, goto_page, selector_timeout
+    from scrapers.images import collect_listing_images, lookup_image
 
     today = date.today().isoformat()
     all_rows: List[Listing] = []
@@ -164,6 +165,9 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
             page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=selector_timeout())
         except PlaywrightTimeoutError:
             continue
+
+        brief_lazy_wait(page)
+        img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
 
         link_nodes = page.locator(LISTING_LINK_SELECTOR)
         seen: set[str] = set()
@@ -194,13 +198,14 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
             else:
                 title = card_text[:120]
             price_raw = extract_price_text(card_text)
-            image_url = ""
-            try:
-                from scrapers.images import extract_card_image
+            image_url = lookup_image(img_map, listing_url, BASE_URL)
+            if not image_url:
+                try:
+                    from scrapers.images import extract_card_image
 
-                image_url = extract_card_image(anchor, BASE_URL)
-            except Exception:
-                pass
+                    image_url = extract_card_image(anchor, BASE_URL)
+                except Exception:
+                    pass
 
             row = Listing(
                 run_date=today,
