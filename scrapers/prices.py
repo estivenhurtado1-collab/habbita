@@ -46,16 +46,29 @@ def _listing_key(url: str) -> str:
     return f"{parsed.netloc}{parsed.path}"
 
 
-def _score_candidate(raw: str, value: int, context: str, *, in_price_element: bool) -> int:
+def _bad_near_amount(context: str, raw: str) -> bool:
+    pos = context.find(raw)
+    if pos < 0:
+        pos = max(0, len(context) - len(raw))
+    window = context[max(0, pos - 8) : pos + len(raw) + 6]
+    return bool(_BAD_CONTEXT.search(window))
+
+
+def _score_candidate(
+    raw: str,
+    value: int,
+    context: str,
+    *,
+    in_price_element: bool,
+) -> int:
     if value < MIN_SALE_COP or value > MAX_SALE_COP:
         return -10_000
-    ctx = context.lower()
     score = 0
     if in_price_element:
         score += 120
-    if _BAD_CONTEXT.search(ctx):
+    if _bad_near_amount(context, raw):
         score -= 200
-    if _DESDE_CONTEXT.search(ctx):
+    if _DESDE_CONTEXT.search(context[max(0, context.find(raw) - 12) : context.find(raw) + 1]):
         score -= 40
     # Precio de venta suele ser el monto principal (no cuotas pequeñas)
     if value >= 120_000_000:
@@ -80,14 +93,6 @@ def pick_best_price(candidates: List[Tuple[str, int, str, bool]]) -> Tuple[str, 
     best_raw, best_val, best_score = scored[0]
     if best_score < 0:
         return "", None
-    # Si hay empate alto, preferir el que NO está en contexto "desde" si existe otro válido
-    for raw, value, sc in scored:
-        if sc < 0:
-            break
-        if sc >= best_score - 10 and not _DESDE_CONTEXT.search(
-            next((c[2] for c in candidates if c[0] == raw), "")
-        ):
-            return raw, value
     return best_raw, best_val
 
 
@@ -103,8 +108,8 @@ def extract_prices_from_text(text: str) -> List[Tuple[str, int, str]]:
         if not value or value in seen:
             continue
         seen.add(value)
-        start = max(0, match.start() - 45)
-        end = min(len(text), match.end() + 45)
+        start = max(0, match.start() - 22)
+        end = min(len(text), match.end() + 22)
         ctx = text[start:end]
         found.append((raw, value, ctx))
     return found
