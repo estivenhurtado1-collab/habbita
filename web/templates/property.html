@@ -4,7 +4,7 @@
 <article class="detail-page">
   {% if prop.image_url %}
   <div class="detail-hero">
-    <img src="{{ prop.image_url }}" alt="{{ prop.title }}" referrerpolicy="no-referrer">
+    <img src="{{ prop.image_url | image_display_url }}" alt="{{ prop.title }}">
   </div>
   {% endif %}
   <div class="detail-header">

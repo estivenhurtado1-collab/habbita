@@ -8,9 +8,11 @@ from datetime import date
 from io import BytesIO
 from pathlib import Path
 from typing import Any, List, Optional
+from urllib.parse import quote, unquote, urlparse
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+import requests
+from fastapi import FastAPI, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -73,6 +75,60 @@ def format_cop(value: Optional[int]) -> str:
 
 
 templates.env.filters["format_cop"] = format_cop
+
+
+def image_display_url(url: Optional[str]) -> str:
+    """Proxy local: los portales suelen bloquear hotlinking directo."""
+    if not url or not str(url).strip():
+        return ""
+    raw = str(url).strip()
+    if raw.startswith("/"):
+        return raw
+    if not raw.startswith("http"):
+        return raw
+    return f"/img?u={quote(raw, safe='')}"
+
+
+templates.env.filters["image_display_url"] = image_display_url
+
+
+def _referer_for_image(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if "metrocuadrado" in host:
+        return "https://www.metrocuadrado.com/"
+    if "fincaraiz" in host:
+        return "https://www.fincaraiz.com.co/"
+    return url
+
+
+@app.get("/img")
+async def proxy_image(u: str = Query("", alias="u")) -> Response:
+    url = unquote(u)
+    if not url.startswith("http"):
+        return Response(status_code=404)
+
+    def fetch() -> tuple[bytes, str]:
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Referer": _referer_for_image(url),
+                "Accept": "image/*,*/*",
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        ctype = resp.headers.get("Content-Type", "image/jpeg").split(";")[0]
+        return resp.content, ctype
+
+    try:
+        body, ctype = await asyncio.to_thread(fetch)
+        return Response(content=body, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        return Response(status_code=404)
 
 
 def get_session_user(request: Request) -> Optional[dict[str, Any]]:

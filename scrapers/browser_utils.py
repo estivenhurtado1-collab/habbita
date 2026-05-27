@@ -28,7 +28,8 @@ def chromium_launch_kwargs() -> dict[str, Any]:
 
 
 def _block_heavy(route) -> None:
-    if route.request.resource_type in ("image", "media", "font"):
+    # No bloquear imágenes: necesitamos src/data-src en el HTML para guardar image_url
+    if route.request.resource_type in ("media", "font"):
         route.abort()
     else:
         route.continue_()

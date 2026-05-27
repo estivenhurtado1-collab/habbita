@@ -61,4 +61,9 @@ def extract_card_image(anchor, base_url: str = "") -> str:
                 value = img.get_attribute(attr)
                 if value and is_listing_image(value):
                     return normalize_image_url(value, base_url)
+            srcset = img.get_attribute("srcset") or ""
+            if srcset:
+                first = srcset.split(",")[0].strip().split()[0]
+                if is_listing_image(first):
+                    return normalize_image_url(first, base_url)
     return ""
