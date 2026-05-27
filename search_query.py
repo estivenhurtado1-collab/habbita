@@ -154,10 +154,25 @@ def scrape_urls_for_criteria(criteria: SearchCriteria) -> List[str]:
     urls: List[str] = []
     for zone in criteria.zones:
         urls.extend(ZONE_SCRAPE_URLS.get(zone, [TARGET_URL]))
-    return list(dict.fromkeys(urls))
+    urls = list(dict.fromkeys(urls))
+    try:
+        from scrapers.browser_utils import is_low_memory
+
+        if is_low_memory():
+            return urls[:1]
+    except ImportError:
+        pass
+    return urls
 
 
-def search_listings(criteria: SearchCriteria, pages_per_url: int = 2) -> List[Listing]:
+def search_listings(criteria: SearchCriteria, pages_per_url: int | None = None) -> List[Listing]:
+    if pages_per_url is None:
+        try:
+            from scrapers.browser_utils import is_low_memory
+
+            pages_per_url = 1 if is_low_memory() else 2
+        except ImportError:
+            pages_per_url = 2
     urls = scrape_urls_for_criteria(criteria)
     collected: List[Listing] = []
     seen: Set[str] = set()

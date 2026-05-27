@@ -152,16 +152,18 @@ def scrape_listings(url: str, max_pages: int) -> List[Listing]:
     today = date.today().isoformat()
     all_rows: List[Listing] = []
 
+    from scrapers.browser_utils import chromium_launch_kwargs, goto_page, new_browser_context
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        browser = p.chromium.launch(**chromium_launch_kwargs())
+        context = new_browser_context(browser)
         page = context.new_page()
         page.set_default_timeout(45000)
 
         for page_idx in range(1, max_pages + 1):
             current_url = url if page_idx == 1 else f"{url}/pagina{page_idx}"
             print(f"[INFO] Extrayendo página {page_idx}: {current_url}")
-            page.goto(current_url, wait_until="networkidle", timeout=90000)
+            goto_page(page, current_url)
 
             try:
                 page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=30000)

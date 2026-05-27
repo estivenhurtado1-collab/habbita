@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from propintel.enrich import listing_to_property_dict
 from propintel.repository import upsert_property
+from scrapers.browser_utils import is_low_memory
 from search.criteria import SearchCriteria, to_legacy
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,7 @@ PER_PORTAL_LIMIT = 5
 
 def _search_fincaraiz(criteria: SearchCriteria) -> list[Any]:
     legacy = to_legacy(criteria)
+    pages = 1 if is_low_memory() else 2
     try:
         from search.aggregator import fincaraiz_search
 
@@ -22,7 +23,7 @@ def _search_fincaraiz(criteria: SearchCriteria) -> list[Any]:
     except ImportError:
         from search_query import search_listings
 
-        return search_listings(legacy)
+        return search_listings(legacy, pages_per_url=pages)
 
 
 def _search_metrocuadrado(criteria: SearchCriteria) -> list[Any]:
@@ -78,6 +79,27 @@ def _process_listings(
     return per_portal
 
 
+def _run_portal(
+    portal: str,
+    portal_criteria: SearchCriteria,
+    criteria: SearchCriteria,
+    seen_fp: set[str],
+    portal_limit: int,
+) -> tuple[str, List[dict], str | None]:
+    try:
+        if portal == "fincaraiz":
+            listings = _search_fincaraiz(portal_criteria)
+        elif portal == "metrocuadrado":
+            listings = _search_metrocuadrado(portal_criteria)
+        else:
+            return portal, [], None
+        rows = _process_listings(portal, listings, criteria, seen_fp, portal_limit)
+        return portal, rows, None
+    except Exception as exc:
+        logger.exception("Error scraping %s", portal)
+        return portal, [], str(exc)
+
+
 def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, str]]:
     """Busca en cada portal y devuelve (lista plana, errores por portal)."""
     portal_limit = min(PER_PORTAL_LIMIT, criteria.max_results)
@@ -91,7 +113,7 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
         transaction_type=criteria.transaction_type,
         price_min=criteria.price_min,
         price_max=criteria.price_max,
-        max_results=portal_limit * 3,
+        max_results=portal_limit * 2,
         portals=criteria.portals,
     )
 
@@ -99,31 +121,21 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
     by_portal: Dict[str, List[dict]] = {}
     seen_fp: set[str] = set()
 
-    jobs = {}
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        if "fincaraiz" in criteria.portals:
-            jobs["fincaraiz"] = pool.submit(_search_fincaraiz, portal_criteria)
-        if "metrocuadrado" in criteria.portals:
-            jobs["metrocuadrado"] = pool.submit(_search_metrocuadrado, portal_criteria)
-        for portal, fut in jobs.items():
-            try:
-                listings = fut.result()
-                by_portal[portal] = _process_listings(
-                    portal, listings, criteria, seen_fp, portal_limit
-                )
-            except Exception as exc:
-                logger.exception("Error scraping %s", portal)
-                errors[portal] = str(exc)
-                by_portal[portal] = []
+    # En Render (512MB) un solo Chromium a la vez
+    for portal in criteria.portals:
+        if portal not in ("fincaraiz", "metrocuadrado"):
+            continue
+        key, rows, err = _run_portal(portal, portal_criteria, criteria, seen_fp, portal_limit)
+        by_portal[key] = rows
+        if err:
+            errors[key] = err
 
-    # Combinar: hasta N por portal, luego rellenar por score sin perder diversidad
     combined: List[dict] = []
     for portal in criteria.portals:
         combined.extend(by_portal.get(portal, []))
 
     if len(combined) > criteria.max_results:
         combined.sort(key=lambda p: p.get("score") or 0, reverse=True)
-        # Garantizar al menos 2 por portal si hay datos
         balanced: List[dict] = []
         used_ids: set[int] = set()
         for portal in criteria.portals:

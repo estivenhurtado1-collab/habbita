@@ -20,6 +20,12 @@ from fincaraiz_daily_bot import (
     parse_bedrooms,
     parse_price_value,
 )
+from scrapers.browser_utils import (
+    chromium_launch_kwargs,
+    goto_page,
+    is_low_memory,
+    new_browser_context,
+)
 from scrapers.images import extract_card_image
 from search_query import KNOWN_ZONES, SearchCriteria
 
@@ -172,30 +178,26 @@ def scrape_url(url: str, max_listings: int = 40) -> List[Listing]:
     today = date.today().isoformat()
     rows: List[Listing] = []
 
+    scroll_rounds = 2 if is_low_memory() else 4
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            locale="es-CO",
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-        )
+        browser = p.chromium.launch(**chromium_launch_kwargs())
+        context = new_browser_context(browser)
         page = context.new_page()
         page.set_default_timeout(45000)
 
-        page.goto(url, wait_until="networkidle", timeout=90000)
+        goto_page(page, url)
         dismiss_cookie_banner(page)
 
         try:
             page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=30000)
         except PlaywrightTimeoutError:
-            scroll_to_load_cards(page, rounds=2)
+            scroll_to_load_cards(page, rounds=scroll_rounds)
             if page.locator(LISTING_LINK_SELECTOR).count() == 0:
                 browser.close()
                 return []
 
-        scroll_to_load_cards(page)
+        scroll_to_load_cards(page, rounds=scroll_rounds)
         link_nodes = page.locator(LISTING_LINK_SELECTOR)
         seen: Set[str] = set()
 
@@ -281,8 +283,13 @@ def search_listings(criteria: SearchCriteria, limit: int = 5) -> List[Listing]:
     collected: List[Listing] = []
     seen: Set[str] = set()
 
-    for url in urls_for_criteria(effective):
-        for listing in scrape_url(url, max_listings=limit * 8):
+    urls = urls_for_criteria(effective)
+    if is_low_memory():
+        urls = urls[:1]
+
+    max_per_url = limit * 4 if is_low_memory() else limit * 8
+    for url in urls:
+        for listing in scrape_url(url, max_listings=max_per_url):
             if listing.listing_url in seen:
                 continue
             seen.add(listing.listing_url)

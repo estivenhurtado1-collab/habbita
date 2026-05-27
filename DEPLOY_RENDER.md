@@ -110,6 +110,7 @@ Si Blueprint falla, hazlo manual:
 
 | Problema | Qué hacer |
 |----------|-----------|
+| **Ran out of memory (512MB)** | Sube a **Standard** (2 GB RAM) en Settings → Instance Type, o aplica el último código (búsqueda secuencial). |
 | Build muy lento o falla por memoria | Usa plan **Starter** o superior (más RAM). |
 | “SECRET_KEY es obligatorio” | Añade variable `SECRET_KEY` en Environment. |
 | Se borran usuarios al redeploy | Activa disco persistente en `/data` y `PROPINTEL_DB=/data/propintel.db`. |
