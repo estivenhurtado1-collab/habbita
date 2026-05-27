@@ -1,6 +1,7 @@
 """Habitta ia — aplicación web MVP."""
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from datetime import date
@@ -250,7 +251,8 @@ async def search_submit(
         limit,
     )
 
-    properties, portal_errors = search_and_store(criteria)
+    # Playwright sync no puede correr dentro del event loop de FastAPI
+    properties, portal_errors = await asyncio.to_thread(search_and_store, criteria)
     results_by_portal = group_by_portal(properties)
     if user:
         log_search(user["id"], criteria.__dict__, len(properties))
