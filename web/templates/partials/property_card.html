@@ -17,7 +17,11 @@
   <div class="card-body">
     <p class="score-label {{ 'good' if (p.score or 0) >= 65 else ('warn' if (p.score or 0) < 45 else '') }}">{{ p.score_label or "Sin score" }}</p>
     <h3><a href="/propiedad/{{ p.id }}">{{ p.title or "Inmueble" }}</a></h3>
+    {% if p.price %}
     <p class="price">{{ p.price | format_cop }}</p>
+    {% else %}
+    <p class="price muted">Precio en el portal — <a href="{{ p.original_url }}" target="_blank" rel="noopener">verificar</a></p>
+    {% endif %}
     <ul class="meta">
       <li>{{ p.neighborhood or "Bogotá" }}</li>
       {% if p.area_m2 %}<li>{{ p.area_m2 | round(0) | int }} m²</li>{% endif %}

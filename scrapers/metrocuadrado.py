@@ -32,6 +32,7 @@ from scrapers.browser_utils import (
     selector_timeout,
 )
 from scrapers.images import collect_listing_images, extract_card_image, lookup_image
+from scrapers.prices import collect_listing_prices, lookup_price
 from search_query import KNOWN_ZONES, SearchCriteria
 
 BASE_URL = "https://www.metrocuadrado.com"
@@ -202,6 +203,7 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
 
     brief_lazy_wait(page)
     img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
+    price_map = collect_listing_prices(page, LISTING_LINK_SELECTOR)
 
     link_nodes = page.locator(LISTING_LINK_SELECTOR)
     seen: Set[str] = set()
@@ -219,7 +221,9 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
         seen.add(listing_url)
 
         card_text = extract_card_text(anchor)
-        price_raw = extract_price_text(card_text)
+        price_raw, price_value = lookup_price(
+            price_map, listing_url, anchor=anchor, card_text=card_text
+        )
         bedrooms = parse_bedrooms(card_text) or parse_bedrooms_from_url(href)
         bathrooms = parse_bathrooms(card_text) or parse_bathrooms_from_url(href)
 
@@ -228,7 +232,7 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
             listing_url=listing_url,
             title=extract_title_metro(card_text, href),
             price_raw=price_raw,
-            price_value=parse_price_value(price_raw),
+            price_value=price_value,
             location=extract_location_metro(card_text, href),
             bedrooms=bedrooms,
             bathrooms=bathrooms,

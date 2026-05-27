@@ -49,16 +49,9 @@ def absolute_url(url: str) -> str:
 
 
 def parse_price_value(price_text: str) -> Optional[int]:
-    if not price_text:
-        return None
-    # Accepts values like $ 357.960.000 or $1,466,775,344
-    digits = re.sub(r"[^\d]", "", price_text)
-    if not digits:
-        return None
-    try:
-        return int(digits)
-    except ValueError:
-        return None
+    from scrapers.prices import parse_price_value as _parse
+
+    return _parse(price_text)
 
 
 def parse_bedrooms(text: str) -> Optional[int]:
@@ -91,8 +84,9 @@ def parse_area(text: str) -> Optional[float]:
 
 
 def extract_price_text(text: str) -> str:
-    match = re.search(r"(\$\s*[\d\.,]+)", text)
-    return match.group(1) if match else ""
+    from scrapers.prices import extract_price_text as _extract
+
+    return _extract(text)
 
 
 def extract_location(text: str) -> str:
@@ -151,6 +145,7 @@ def extract_card_text(anchor) -> str:
 def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int | None) -> List[Listing]:
     from scrapers.browser_utils import brief_lazy_wait, goto_page, selector_timeout
     from scrapers.images import collect_listing_images, lookup_image
+    from scrapers.prices import collect_listing_prices, lookup_price
 
     today = date.today().isoformat()
     all_rows: List[Listing] = []
@@ -168,6 +163,7 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
 
         brief_lazy_wait(page)
         img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
+        price_map = collect_listing_prices(page, LISTING_LINK_SELECTOR)
 
         link_nodes = page.locator(LISTING_LINK_SELECTOR)
         seen: set[str] = set()
@@ -197,7 +193,9 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
                 title = card_text.split("Desde")[0].strip()[:120]
             else:
                 title = card_text[:120]
-            price_raw = extract_price_text(card_text)
+            price_raw, price_value = lookup_price(
+                price_map, listing_url, anchor=anchor, card_text=card_text
+            )
             image_url = lookup_image(img_map, listing_url, BASE_URL)
             if not image_url:
                 try:
@@ -212,7 +210,7 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
                 listing_url=listing_url,
                 title=title,
                 price_raw=price_raw,
-                price_value=parse_price_value(price_raw),
+                price_value=price_value,
                 location=extract_location(card_text),
                 bedrooms=parse_bedrooms(card_text),
                 bathrooms=parse_bathrooms(card_text),

@@ -23,7 +23,7 @@ def upsert_property(data: dict[str, Any]) -> dict[str, Any]:
             conn.execute(
                 """
                 UPDATE properties SET
-                    title = ?, price = ?, price_per_m2 = ?, neighborhood = ?,
+                    title = ?, price = COALESCE(?, price), price_per_m2 = ?, neighborhood = ?,
                     area_m2 = ?, bedrooms = ?, bathrooms = ?, parking = ?,
                     stratum = ?, score = ?, valorization_pct = ?,
                     analysis_text = ?, score_label = ?,

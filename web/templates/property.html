@@ -16,7 +16,11 @@
   </div>
 
   <h1>{{ prop.title }}</h1>
+  {% if prop.price %}
   <p class="price-lg">{{ prop.price | format_cop }}</p>
+  {% else %}
+  <p class="price-lg muted">Consulta el precio actual en <a href="{{ prop.original_url }}" target="_blank" rel="noopener">{{ prop.portal }}</a></p>
+  {% endif %}
   <p class="score-label-lg">{{ prop.score_label }}</p>
 
   <ul class="meta meta-lg">
