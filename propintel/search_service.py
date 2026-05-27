@@ -2,20 +2,21 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
 
 from propintel.enrich import listing_to_property_dict
 from propintel.repository import upsert_property
-from scrapers.browser_utils import is_low_memory
+from scrapers.browser_utils import ScrapeSession, search_parallel_enabled
 from search.criteria import SearchCriteria, to_legacy
 
 logger = logging.getLogger(__name__)
 PER_PORTAL_LIMIT = 5
 
 
-def _search_fincaraiz(criteria: SearchCriteria) -> list[Any]:
+def _search_fincaraiz(criteria: SearchCriteria, session=None) -> list[Any]:
     legacy = to_legacy(criteria)
-    pages = 1 if is_low_memory() else 2
+    pages = 1
     try:
         from search.aggregator import fincaraiz_search
 
@@ -23,10 +24,10 @@ def _search_fincaraiz(criteria: SearchCriteria) -> list[Any]:
     except ImportError:
         from search_query import search_listings
 
-        return search_listings(legacy, pages_per_url=pages)
+        return search_listings(legacy, pages_per_url=pages, session=session)
 
 
-def _search_metrocuadrado(criteria: SearchCriteria) -> list[Any]:
+def _search_metrocuadrado(criteria: SearchCriteria, session=None) -> list[Any]:
     legacy = to_legacy(criteria)
     try:
         from search.aggregator import metrocuadrado_search
@@ -36,7 +37,7 @@ def _search_metrocuadrado(criteria: SearchCriteria) -> list[Any]:
         pass
     from scrapers.metrocuadrado import search_listings
 
-    return search_listings(legacy, limit=criteria.max_results)
+    return search_listings(legacy, limit=criteria.max_results, session=session)
 
 
 def _passes_filters(prop: dict, criteria: SearchCriteria) -> bool:
@@ -85,12 +86,13 @@ def _run_portal(
     criteria: SearchCriteria,
     seen_fp: set[str],
     portal_limit: int,
+    session=None,
 ) -> tuple[str, List[dict], str | None]:
     try:
         if portal == "fincaraiz":
-            listings = _search_fincaraiz(portal_criteria)
+            listings = _search_fincaraiz(portal_criteria, session=session)
         elif portal == "metrocuadrado":
-            listings = _search_metrocuadrado(portal_criteria)
+            listings = _search_metrocuadrado(portal_criteria, session=session)
         else:
             return portal, [], None
         rows = _process_listings(portal, listings, criteria, seen_fp, portal_limit)
@@ -98,6 +100,20 @@ def _run_portal(
     except Exception as exc:
         logger.exception("Error scraping %s", portal)
         return portal, [], str(exc)
+
+
+def _run_portal_isolated(
+    portal: str,
+    portal_criteria: SearchCriteria,
+    criteria: SearchCriteria,
+    portal_limit: int,
+) -> tuple[str, List[dict], str | None]:
+    """Hilo propio: cada portal abre su Chromium (SEARCH_PARALLEL)."""
+    seen_fp: set[str] = set()
+    with ScrapeSession() as session:
+        return _run_portal(
+            portal, portal_criteria, criteria, seen_fp, portal_limit, session=session
+        )
 
 
 def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, str]]:
@@ -121,14 +137,40 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
     by_portal: Dict[str, List[dict]] = {}
     seen_fp: set[str] = set()
 
-    # En Render (512MB) un solo Chromium a la vez
-    for portal in criteria.portals:
-        if portal not in ("fincaraiz", "metrocuadrado"):
-            continue
-        key, rows, err = _run_portal(portal, portal_criteria, criteria, seen_fp, portal_limit)
-        by_portal[key] = rows
-        if err:
-            errors[key] = err
+    active = [p for p in criteria.portals if p in ("fincaraiz", "metrocuadrado")]
+    parallel = search_parallel_enabled() and len(active) > 1
+
+    if parallel:
+        with ThreadPoolExecutor(max_workers=len(active)) as pool:
+            futures = {
+                pool.submit(
+                    _run_portal_isolated,
+                    portal,
+                    portal_criteria,
+                    criteria,
+                    portal_limit,
+                ): portal
+                for portal in active
+            }
+            for fut in as_completed(futures):
+                key, rows, err = fut.result()
+                by_portal[key] = rows
+                if err:
+                    errors[key] = err
+    else:
+        with ScrapeSession() as session:
+            for portal in active:
+                key, rows, err = _run_portal(
+                    portal,
+                    portal_criteria,
+                    criteria,
+                    seen_fp,
+                    portal_limit,
+                    session=session,
+                )
+                by_portal[key] = rows
+                if err:
+                    errors[key] = err
 
     combined: List[dict] = []
     for portal in criteria.portals:

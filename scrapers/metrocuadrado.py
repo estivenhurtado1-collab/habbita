@@ -25,6 +25,10 @@ from scrapers.browser_utils import (
     goto_page,
     is_low_memory,
     new_browser_context,
+    page_default_timeout,
+    scroll_pause_ms,
+    scroll_rounds_default,
+    selector_timeout,
 )
 from scrapers.images import extract_card_image
 from search_query import KNOWN_ZONES, SearchCriteria
@@ -156,85 +160,93 @@ def dismiss_cookie_banner(page) -> None:
         "#onetrust-accept-btn-handler",
         "button:has-text('Aceptar')",
         "button:has-text('ACEPTAR')",
-        "button:has-text('Aceptar todas')",
     ]:
         try:
             btn = page.locator(sel).first
-            if btn.count() and btn.is_visible(timeout=2000):
-                btn.click(timeout=3000)
-                page.wait_for_timeout(500)
+            if btn.count() and btn.is_visible(timeout=600):
+                btn.click(timeout=1500)
                 return
         except Exception:
             continue
 
 
-def scroll_to_load_cards(page, rounds: int = 4) -> None:
+def scroll_to_load_cards(page, rounds: int | None = None, min_links: int = 0) -> None:
+    if rounds is None:
+        rounds = scroll_rounds_default()
+    pause = scroll_pause_ms()
     for _ in range(rounds):
-        page.mouse.wheel(0, 2200)
-        page.wait_for_timeout(1200)
+        if min_links and page.locator(LISTING_LINK_SELECTOR).count() >= min_links:
+            return
+        page.mouse.wheel(0, 1800)
+        page.wait_for_timeout(pause)
 
 
-def scrape_url(url: str, max_listings: int = 40) -> List[Listing]:
+def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
     today = date.today().isoformat()
     rows: List[Listing] = []
 
-    scroll_rounds = 2 if is_low_memory() else 4
+    goto_page(page, url)
+    dismiss_cookie_banner(page)
+
+    try:
+        page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=selector_timeout())
+    except PlaywrightTimeoutError:
+        scroll_to_load_cards(page, min_links=max_listings)
+        if page.locator(LISTING_LINK_SELECTOR).count() == 0:
+            return []
+
+    if page.locator(LISTING_LINK_SELECTOR).count() < max_listings:
+        scroll_to_load_cards(page, min_links=max_listings)
+
+    link_nodes = page.locator(LISTING_LINK_SELECTOR)
+    seen: Set[str] = set()
+
+    for i in range(min(link_nodes.count(), max_listings * 3)):
+        if len(rows) >= max_listings:
+            break
+        anchor = link_nodes.nth(i)
+        href = anchor.get_attribute("href") or ""
+        if not is_property_listing_href(href):
+            continue
+        listing_url = absolute_url(href)
+        if not listing_url or listing_url in seen:
+            continue
+        seen.add(listing_url)
+
+        card_text = extract_card_text(anchor)
+        price_raw = extract_price_text(card_text)
+        bedrooms = parse_bedrooms(card_text) or parse_bedrooms_from_url(href)
+        bathrooms = parse_bathrooms(card_text) or parse_bathrooms_from_url(href)
+
+        row = Listing(
+            run_date=today,
+            listing_url=listing_url,
+            title=extract_title_metro(card_text, href),
+            price_raw=price_raw,
+            price_value=parse_price_value(price_raw),
+            location=extract_location_metro(card_text, href),
+            bedrooms=bedrooms,
+            bathrooms=bathrooms,
+            area_m2=parse_area(card_text),
+            source_text=card_text[:1200],
+            image_url=extract_card_image(anchor, BASE_URL),
+        )
+        rows.append(row)
+
+    return rows
+
+
+def scrape_url(url: str, max_listings: int = 40, *, session=None) -> List[Listing]:
+    if session is not None:
+        return session.run_page(_scrape_url_on_page, url, max_listings)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs())
         context = new_browser_context(browser)
         page = context.new_page()
-        page.set_default_timeout(45000)
-
-        goto_page(page, url)
-        dismiss_cookie_banner(page)
-
-        try:
-            page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=30000)
-        except PlaywrightTimeoutError:
-            scroll_to_load_cards(page, rounds=scroll_rounds)
-            if page.locator(LISTING_LINK_SELECTOR).count() == 0:
-                browser.close()
-                return []
-
-        scroll_to_load_cards(page, rounds=scroll_rounds)
-        link_nodes = page.locator(LISTING_LINK_SELECTOR)
-        seen: Set[str] = set()
-
-        for i in range(link_nodes.count()):
-            if len(rows) >= max_listings:
-                break
-            anchor = link_nodes.nth(i)
-            href = anchor.get_attribute("href") or ""
-            if not is_property_listing_href(href):
-                continue
-            listing_url = absolute_url(href)
-            if not listing_url or listing_url in seen:
-                continue
-            seen.add(listing_url)
-
-            card_text = extract_card_text(anchor)
-            price_raw = extract_price_text(card_text)
-            bedrooms = parse_bedrooms(card_text) or parse_bedrooms_from_url(href)
-            bathrooms = parse_bathrooms(card_text) or parse_bathrooms_from_url(href)
-
-            row = Listing(
-                run_date=today,
-                listing_url=listing_url,
-                title=extract_title_metro(card_text, href),
-                price_raw=price_raw,
-                price_value=parse_price_value(price_raw),
-                location=extract_location_metro(card_text, href),
-                bedrooms=bedrooms,
-                bathrooms=bathrooms,
-                area_m2=parse_area(card_text),
-                source_text=card_text[:1200],
-                image_url=extract_card_image(anchor, BASE_URL),
-            )
-            rows.append(row)
-
+        page.set_default_timeout(page_default_timeout())
+        rows = _scrape_url_on_page(page, url, max_listings)
         browser.close()
-
     return rows
 
 
@@ -271,7 +283,7 @@ def listing_matches_metro(listing: Listing, criteria: SearchCriteria) -> bool:
     return True
 
 
-def search_listings(criteria: SearchCriteria, limit: int = 5) -> List[Listing]:
+def search_listings(criteria: SearchCriteria, limit: int = 5, *, session=None) -> List[Listing]:
     """Busca en Metrocuadrado según criterios; devuelve hasta ``limit`` resultados."""
     effective = SearchCriteria(
         bedrooms=criteria.bedrooms,
@@ -287,13 +299,18 @@ def search_listings(criteria: SearchCriteria, limit: int = 5) -> List[Listing]:
     if is_low_memory():
         urls = urls[:1]
 
-    max_per_url = limit * 4 if is_low_memory() else limit * 8
+    max_per_url = min(limit + 10, 25)
+    harvest_cap = max_per_url * len(urls)
     for url in urls:
-        for listing in scrape_url(url, max_listings=max_per_url):
+        for listing in scrape_url(url, max_listings=max_per_url, session=session):
             if listing.listing_url in seen:
                 continue
             seen.add(listing.listing_url)
             collected.append(listing)
+            if len(collected) >= harvest_cap:
+                break
+        if len(collected) >= harvest_cap:
+            break
 
     matched = [item for item in collected if listing_matches_metro(item, effective)]
     if matched:

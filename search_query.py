@@ -165,7 +165,12 @@ def scrape_urls_for_criteria(criteria: SearchCriteria) -> List[str]:
     return urls
 
 
-def search_listings(criteria: SearchCriteria, pages_per_url: int | None = None) -> List[Listing]:
+def search_listings(
+    criteria: SearchCriteria,
+    pages_per_url: int | None = None,
+    *,
+    session=None,
+) -> List[Listing]:
     if pages_per_url is None:
         try:
             from scrapers.browser_utils import is_low_memory
@@ -177,12 +182,23 @@ def search_listings(criteria: SearchCriteria, pages_per_url: int | None = None) 
     collected: List[Listing] = []
     seen: Set[str] = set()
 
+    harvest_cap = max(criteria.max_results * 4, 20)
+    max_per_url = min(harvest_cap, 30)
     for url in urls:
-        for listing in scrape_listings(url, max_pages=pages_per_url):
+        for listing in scrape_listings(
+            url,
+            pages_per_url,
+            session=session,
+            max_listings=max_per_url,
+        ):
             if listing.listing_url in seen:
                 continue
             seen.add(listing.listing_url)
             collected.append(listing)
+            if len(collected) >= harvest_cap:
+                break
+        if len(collected) >= harvest_cap:
+            break
 
     matched = [item for item in collected if listing_matches(item, criteria)]
     if matched:

@@ -148,79 +148,102 @@ def extract_card_text(anchor) -> str:
     return best
 
 
-def scrape_listings(url: str, max_pages: int) -> List[Listing]:
+def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int | None) -> List[Listing]:
+    from scrapers.browser_utils import goto_page, selector_timeout
+
     today = date.today().isoformat()
     all_rows: List[Listing] = []
 
-    from scrapers.browser_utils import chromium_launch_kwargs, goto_page, new_browser_context
+    for page_idx in range(1, max_pages + 1):
+        if max_listings is not None and len(all_rows) >= max_listings:
+            break
+        current_url = url if page_idx == 1 else f"{url}/pagina{page_idx}"
+        goto_page(page, current_url)
 
+        try:
+            page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=selector_timeout())
+        except PlaywrightTimeoutError:
+            continue
+
+        link_nodes = page.locator(LISTING_LINK_SELECTOR)
+        seen: set[str] = set()
+
+        for i in range(link_nodes.count()):
+            if max_listings is not None and len(all_rows) >= max_listings:
+                break
+            anchor = link_nodes.nth(i)
+            href = anchor.get_attribute("href") or ""
+            if not is_property_listing_href(href):
+                continue
+            listing_url = absolute_url(href)
+            if not listing_url or listing_url in seen:
+                continue
+            seen.add(listing_url)
+
+            card_text = extract_card_text(anchor)
+            title_match = re.search(
+                r"Apartamento en venta en [^$]+|Casa en venta en [^$]+|"
+                r"[\w\s]+, apartamentos? en venta en [^$]+",
+                card_text,
+                re.IGNORECASE,
+            )
+            if title_match:
+                title = normalize_text(title_match.group(0))[:120]
+            elif "Desde" in card_text:
+                title = card_text.split("Desde")[0].strip()[:120]
+            else:
+                title = card_text[:120]
+            price_raw = extract_price_text(card_text)
+            image_url = ""
+            try:
+                from scrapers.images import extract_card_image
+
+                image_url = extract_card_image(anchor, BASE_URL)
+            except Exception:
+                pass
+
+            row = Listing(
+                run_date=today,
+                listing_url=listing_url,
+                title=title,
+                price_raw=price_raw,
+                price_value=parse_price_value(price_raw),
+                location=extract_location(card_text),
+                bedrooms=parse_bedrooms(card_text),
+                bathrooms=parse_bathrooms(card_text),
+                area_m2=parse_area(card_text),
+                source_text=card_text[:1200],
+                image_url=image_url,
+            )
+            all_rows.append(row)
+
+    return all_rows
+
+
+def scrape_listings(
+    url: str,
+    max_pages: int,
+    *,
+    session=None,
+    max_listings: int | None = None,
+) -> List[Listing]:
+    from scrapers.browser_utils import (
+        ScrapeSession,
+        chromium_launch_kwargs,
+        new_browser_context,
+        page_default_timeout,
+    )
+
+    if session is not None:
+        return session.run_page(_scrape_listings_on_page, url, max_pages, max_listings)
+
+    all_rows: List[Listing] = []
     with sync_playwright() as p:
         browser = p.chromium.launch(**chromium_launch_kwargs())
         context = new_browser_context(browser)
         page = context.new_page()
-        page.set_default_timeout(45000)
-
-        for page_idx in range(1, max_pages + 1):
-            current_url = url if page_idx == 1 else f"{url}/pagina{page_idx}"
-            print(f"[INFO] Extrayendo página {page_idx}: {current_url}")
-            goto_page(page, current_url)
-
-            try:
-                page.wait_for_selector(LISTING_LINK_SELECTOR, timeout=30000)
-            except PlaywrightTimeoutError:
-                print(f"[WARN] No se encontraron tarjetas en página {page_idx}.")
-                continue
-
-            link_nodes = page.locator(LISTING_LINK_SELECTOR)
-            seen = set()
-
-            for i in range(link_nodes.count()):
-                anchor = link_nodes.nth(i)
-                href = anchor.get_attribute("href") or ""
-                if not is_property_listing_href(href):
-                    continue
-                listing_url = absolute_url(href)
-                if not listing_url or listing_url in seen:
-                    continue
-                seen.add(listing_url)
-
-                card_text = extract_card_text(anchor)
-                title_match = re.search(
-                    r"Apartamento en venta en [^$]+|Casa en venta en [^$]+|"
-                    r"[\w\s]+, apartamentos? en venta en [^$]+",
-                    card_text,
-                    re.IGNORECASE,
-                )
-                if title_match:
-                    title = normalize_text(title_match.group(0))[:120]
-                elif "Desde" in card_text:
-                    title = card_text.split("Desde")[0].strip()[:120]
-                else:
-                    title = card_text[:120]
-                price_raw = extract_price_text(card_text)
-                image_url = ""
-                try:
-                    from scrapers.images import extract_card_image
-
-                    image_url = extract_card_image(anchor, BASE_URL)
-                except Exception:
-                    pass
-
-                row = Listing(
-                    run_date=today,
-                    listing_url=listing_url,
-                    title=title,
-                    price_raw=price_raw,
-                    price_value=parse_price_value(price_raw),
-                    location=extract_location(card_text),
-                    bedrooms=parse_bedrooms(card_text),
-                    bathrooms=parse_bathrooms(card_text),
-                    area_m2=parse_area(card_text),
-                    source_text=card_text[:1200],
-                    image_url=image_url,
-                )
-                all_rows.append(row)
-
+        page.set_default_timeout(page_default_timeout())
+        all_rows = _scrape_listings_on_page(page, url, max_pages, max_listings)
         browser.close()
 
     # Keep most complete row per URL
