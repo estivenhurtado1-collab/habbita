@@ -1,0 +1,12 @@
+playwright
+pandas
+requests
+python-dotenv
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+bcrypt>=4.0,<5
+reportlab
+openai
+itsdangerous

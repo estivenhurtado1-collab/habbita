@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: habitta-ia
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PROPINTEL_DB
+        value: /data/propintel.db
+      - key: PORT
+        value: "8000"
+    disk:
+      name: habitta-data
+      mountPath: /data
+      sizeGB: 1

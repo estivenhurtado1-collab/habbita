@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ prop.title }} — Habitta ia{% endblock %}
+{% block content %}
+<article class="detail-page">
+  {% if prop.image_url %}
+  <div class="detail-hero">
+    <img src="{{ prop.image_url }}" alt="{{ prop.title }}" referrerpolicy="no-referrer">
+  </div>
+  {% endif %}
+  <div class="detail-header">
+    <span class="portal-tag {{ prop.portal }}">{{ prop.portal }}</span>
+    <div class="score-hero {{ 'good' if (prop.score or 0) >= 65 else ('bad' if (prop.score or 0) < 45 else '') }}">
+      <span class="score-num">{{ prop.score }}</span>
+      <span class="score-sub">/ 100</span>
+    </div>
+  </div>
+
+  <h1>{{ prop.title }}</h1>
+  <p class="price-lg">{{ prop.price | format_cop }}</p>
+  <p class="score-label-lg">{{ prop.score_label }}</p>
+
+  <ul class="meta meta-lg">
+    <li>{{ prop.neighborhood }}, {{ prop.locality }}</li>
+    {% if prop.area_m2 %}<li>{{ prop.area_m2 | round(0) | int }} m²</li>{% endif %}
+    {% if prop.bedrooms %}<li>{{ prop.bedrooms }} hab</li>{% endif %}
+    {% if prop.bathrooms %}<li>{{ prop.bathrooms }} ba</li>{% endif %}
+    {% if prop.parking is not none %}<li>{{ prop.parking }} parq.</li>{% endif %}
+    {% if prop.stratum %}<li>Estrato {{ prop.stratum }}</li>{% endif %}
+  </ul>
+
+  {% if prop.price_per_m2 %}
+  <p class="muted">Precio/m²: {{ prop.price_per_m2 | round(0) | int | format_cop }}</p>
+  {% endif %}
+
+  <section class="card analysis-card">
+    <h2>Análisis IA</h2>
+    <p>{{ prop.analysis_text }}</p>
+    <p class="val-tag positive">Valorización estimada zona: {{ "%.1f"|format(prop.valorization_pct or 0) }}% anual</p>
+  </section>
+
+  {% if price_history|length > 1 and is_premium %}
+  <section class="card">
+    <h2>Historial de precio</h2>
+    <ul class="simple-list">
+      {% for h in price_history %}
+      <li>{{ h.recorded_at[:10] }}: {{ h.price | format_cop }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% elif not is_premium %}
+  <p class="notice"><a href="/premium">Premium</a> desbloquea historial de precios completo.</p>
+  {% endif %}
+
+  <div class="detail-actions">
+    <a href="{{ prop.original_url }}" class="btn btn-primary" target="_blank" rel="noopener">Ver en {{ prop.portal }}</a>
+    {% if user %}
+    <form method="post" action="/favoritos/{{ prop.id }}" class="inline-form">
+      <button type="submit" class="btn btn-ghost">{% if is_fav %}Quitar favorito{% else %}Guardar favorito{% endif %}</button>
+    </form>
+    {% endif %}
+    {% if is_premium %}
+    <a href="/reporte/{{ prop.id }}/pdf" class="btn btn-ghost">Descargar PDF</a>
+    {% endif %}
+    <a href="/comparar?ids={{ prop.id }}" class="btn btn-ghost">Comparar</a>
+  </div>
+</article>
+{% endblock %}

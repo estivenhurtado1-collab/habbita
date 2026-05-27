@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Buscar — Habitta ia{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Buscador inteligente</h1>
+  <p class="muted">Finca Raíz + Metrocuadrado · Bogotá · análisis en ~30–90 s</p>
+</section>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% if show_premium_cta %}<a href="/premium" class="btn btn-primary">Activar Premium</a>{% endif %}
+{% if show_login_cta %}<a href="/auth/register" class="btn btn-primary">Crear cuenta gratis</a>{% endif %}
+{% endif %}
+
+{% if not is_premium and user %}
+<p class="notice">Plan gratuito: {{ 2 }} búsquedas/día · 5 favoritos máx.</p>
+{% endif %}
+
+<form class="search-form card" method="post" action="/buscar" id="search-form">
+  <div class="form-row">
+    <label>Operación</label>
+    <div class="chip-group">
+      <label class="chip"><input type="radio" name="transaction_type" value="compra" checked> Compra</label>
+      <label class="chip"><input type="radio" name="transaction_type" value="arriendo"> Arriendo</label>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <label>Tipo</label>
+    <div class="chip-group">
+      <label class="chip"><input type="radio" name="property_type" value="apartamento" checked> Apartamento</label>
+      <label class="chip"><input type="radio" name="property_type" value="casa"> Casa</label>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="field">
+      <label for="price_min">Precio mínimo (COP)</label>
+      <input type="number" id="price_min" name="price_min" step="1000000" placeholder="200000000">
+    </div>
+    <div class="field">
+      <label for="price_max">Precio máximo (COP)</label>
+      <input type="number" id="price_max" name="price_max" step="1000000" placeholder="800000000">
+    </div>
+    <div class="field">
+      <label for="bedrooms">Habitaciones</label>
+      <input type="number" id="bedrooms" name="bedrooms" min="1" max="10">
+    </div>
+    <div class="field">
+      <label for="bathrooms">Baños mín.</label>
+      <input type="number" id="bathrooms" name="bathrooms" min="1" max="10">
+    </div>
+    <div class="field">
+      <label for="parking">Parqueaderos mín.</label>
+      <input type="number" id="parking" name="parking" min="0" max="5">
+    </div>
+    <div class="field">
+      <label for="stratum">Estrato</label>
+      <select id="stratum" name="stratum">
+        <option value="">Cualquiera</option>
+        {% for s in range(1, 7) %}
+        <option value="{{ s }}">{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <fieldset class="field">
+    <legend>Barrios</legend>
+    <div class="zone-grid">
+      {% for zone in zones %}
+      <label class="checkbox"><input type="checkbox" name="zones" value="{{ zone }}"> {{ zone | capitalize }}</label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset class="field">
+    <legend>Portales</legend>
+    <label class="checkbox"><input type="checkbox" name="portal_fincaraiz" value="1" checked> Finca Raíz</label>
+    <label class="checkbox"><input type="checkbox" name="portal_metrocuadrado" value="1" checked> Metrocuadrado</label>
+  </fieldset>
+
+  <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Buscar con IA</button>
+</form>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <p>Analizando mercado…</p>
+    <span class="muted">30–90 segundos</span>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById("search-form")?.addEventListener("submit", () => {
+    document.getElementById("loading-overlay")?.classList.remove("hidden");
+    document.getElementById("submit-btn").disabled = true;
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Resultados — {{ criteria_summary }}{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Resultados</h1>
+  <p class="muted">{{ criteria_summary }} · {{ properties|length }} inmuebles · hasta 5 por portal</p>
+  <a href="/buscar" class="link">← Nueva búsqueda</a>
+</section>
+
+{% if portal_errors.get('fincaraiz') %}
+<div class="alert alert-error">Finca Raíz: {{ portal_errors.fincaraiz }}</div>
+{% endif %}
+{% if portal_errors.get('metrocuadrado') %}
+<div class="alert alert-error">Metrocuadrado: {{ portal_errors.metrocuadrado }}</div>
+{% endif %}
+
+{% if properties %}
+  {% if 'fincaraiz' in criteria.portals %}
+  <section class="portal-section">
+    <h2 class="portal-heading fincaraiz">Finca Raíz <span class="count">({{ results_by_portal.fincaraiz|length }})</span></h2>
+    {% if results_by_portal.fincaraiz %}
+    <div class="card-grid">
+      {% for p in results_by_portal.fincaraiz %}
+      {% set fav_ids = fav_ids|default([]) %}
+      {% include "partials/property_card.html" %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">Sin coincidencias en Finca Raíz para estos filtros.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if 'metrocuadrado' in criteria.portals %}
+  <section class="portal-section">
+    <h2 class="portal-heading metrocuadrado">Metrocuadrado <span class="count">({{ results_by_portal.metrocuadrado|length }})</span></h2>
+    {% if results_by_portal.metrocuadrado %}
+    <div class="card-grid">
+      {% for p in results_by_portal.metrocuadrado %}
+      {% set fav_ids = fav_ids|default([]) %}
+      {% include "partials/property_card.html" %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">Sin coincidencias en Metrocuadrado. Prueba sin filtro de precio o con menos habitaciones exactas.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <div class="compare-bar">
+    <p>Comparar: <code>/comparar?ids=1,2,3</code></p>
+  </div>
+{% else %}
+<div class="empty-state card">
+  <h2>Sin resultados</h2>
+  <p>Amplía precio, quita filtros o prueba otro barrio. Verifica que ambos portales estén marcados.</p>
+  <a href="/buscar" class="btn btn-primary">Buscar de nuevo</a>
+</div>
+{% endif %}
+{% endblock %}

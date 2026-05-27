@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Perfil — Habitta ia{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Perfil</h1>
+  <p class="muted">Plan: <strong>{% if is_premium %}Premium{% else %}Gratuito{% endif %}</strong></p>
+</section>
+<form method="post" action="/perfil" class="card search-form">
+  <div class="field">
+    <label>Nombre</label>
+    <input type="text" name="name" value="{{ user.name }}" required>
+  </div>
+  <div class="field">
+    <label>Email</label>
+    <input type="email" value="{{ user.email }}" disabled>
+  </div>
+  <div class="field">
+    <label>Presupuesto aprox. (COP)</label>
+    <input type="number" name="budget" value="{{ user.budget or '' }}" step="1000000">
+  </div>
+  <div class="field">
+    <label>Objetivo</label>
+    <select name="goal">
+      <option value="comprar" {% if user.goal == 'comprar' %}selected{% endif %}>Comprar</option>
+      <option value="arrendar" {% if user.goal == 'arrendar' %}selected{% endif %}>Arrendar</option>
+      <option value="invertir" {% if user.goal == 'invertir' %}selected{% endif %}>Invertir</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Tipo preferido</label>
+    <select name="property_type_pref">
+      <option value="apartamento">Apartamento</option>
+      <option value="casa">Casa</option>
+    </select>
+  </div>
+  <fieldset class="field">
+    <legend>Zonas favoritas</legend>
+    <div class="zone-grid">
+      {% for zone in zones %}
+      <label class="checkbox">
+        <input type="checkbox" name="favorite_zones" value="{{ zone }}"
+          {% if zone in user.favorite_zones %}checked{% endif %}> {{ zone | capitalize }}
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <button type="submit" class="btn btn-primary">Guardar</button>
+</form>
+{% endblock %}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador de inmuebles — Bogotá</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1>Buscador de inmuebles</h1>
+      <p class="subtitle">FincaRaíz y Metrocuadrado · Bogotá</p>
+    </header>
+
+    <main class="card">
+      <form id="search-form" class="search-form" method="post" action="/buscar">
+        <fieldset class="field-group">
+          <legend>Tipo de inmueble</legend>
+          <label class="radio-label">
+            <input type="radio" name="property_type" value="apartamento" checked>
+            Apartamento
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="property_type" value="casa">
+            Casa
+          </label>
+        </fieldset>
+
+        <div class="field">
+          <label for="bedrooms">Habitaciones</label>
+          <input type="number" id="bedrooms" name="bedrooms" min="1" max="10" placeholder="ej. 2">
+        </div>
+
+        <fieldset class="field-group">
+          <legend>Barrios / zonas</legend>
+          <p class="hint">Marca uno o varios. Si no eliges ninguno, se busca en Bogotá en general.</p>
+          <div class="zone-grid">
+            {% for zone in zones %}
+            <label class="checkbox-label">
+              <input type="checkbox" name="zones" value="{{ zone }}">
+              {{ zone | capitalize }}
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label>Ciudad</label>
+          <input type="text" value="{{ city }}" disabled class="input-disabled">
+        </div>
+
+        <fieldset class="field-group">
+          <legend>Portales</legend>
+          <label class="checkbox-label">
+            <input type="checkbox" name="portal_fincaraiz" value="1" checked>
+            FincaRaíz
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="portal_metrocuadrado" value="1" checked>
+            Metrocuadrado
+          </label>
+        </fieldset>
+
+        <p class="notice">
+          La búsqueda usa scraping real y puede tardar <strong>30–90 segundos</strong>.
+          No cierres esta pestaña hasta ver los resultados.
+        </p>
+
+        <button type="submit" class="btn-primary" id="submit-btn">Buscar</button>
+      </form>
+    </main>
+  </div>
+
+  <div id="loading-overlay" class="loading-overlay hidden" aria-live="polite">
+    <div class="loading-box">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-title">Buscando inmuebles…</p>
+      <p class="loading-text">Esto puede tardar entre 30 y 90 segundos.</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("search-form").addEventListener("submit", function () {
+      document.getElementById("loading-overlay").classList.remove("hidden");
+      document.getElementById("submit-btn").disabled = true;
+    });
+  </script>
+</body>
+</html>

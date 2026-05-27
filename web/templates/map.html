@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Mapa — Habitta ia{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Mapa de oportunidades</h1>
+  <p class="muted">Calor por valorización estimada · Bogotá</p>
+</section>
+<div id="map" class="map-container"></div>
+<p class="muted map-legend"><span class="dot hot"></span> Alta valorización · <span class="dot cool"></span> Zonas emergentes</p>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const markers = {{ markers | safe }};
+  const map = L.map("map").setView([4.65, -74.06], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap"
+  }).addTo(map);
+  markers.forEach(m => {
+    const color = (m.valorization_pct || 5) >= 6 ? "#16a34a" : "#2563eb";
+    L.circleMarker([m.lat, m.lng], {
+      radius: 8,
+      color,
+      fillColor: color,
+      fillOpacity: 0.75
+    }).bindPopup(`<b>${m.title || "Inmueble"}</b><br>${m.neighborhood}<br>Score: ${m.score}<br><a href="/propiedad/${m.id}">Ver</a>`).addTo(map);
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+<article class="property-card">
+  <div class="card-img {% if not p.image_url %}placeholder-img{% endif %}">
+    {% if p.image_url %}
+    <img
+      src="{{ p.image_url }}"
+      alt="{{ p.title or 'Inmueble' }}"
+      loading="lazy"
+      referrerpolicy="no-referrer"
+      onerror="this.closest('.card-img').classList.add('placeholder-img'); this.remove();"
+    >
+    {% endif %}
+    <span class="portal-tag {{ p.portal }}">{{ p.portal }}</span>
+    <div class="score-ring" data-score="{{ p.score or 0 }}">
+      <span>{{ p.score or "—" }}</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <p class="score-label {{ 'good' if (p.score or 0) >= 65 else ('warn' if (p.score or 0) < 45 else '') }}">{{ p.score_label or "Sin score" }}</p>
+    <h3><a href="/propiedad/{{ p.id }}">{{ p.title or "Inmueble" }}</a></h3>
+    <p class="price">{{ p.price | format_cop }}</p>
+    <ul class="meta">
+      <li>{{ p.neighborhood or "Bogotá" }}</li>
+      {% if p.area_m2 %}<li>{{ p.area_m2 | round(0) | int }} m²</li>{% endif %}
+      {% if p.bedrooms %}<li>{{ p.bedrooms }} hab</li>{% endif %}
+      {% if p.bathrooms %}<li>{{ p.bathrooms }} ba</li>{% endif %}
+    </ul>
+    {% if p.valorization_pct %}
+    <p class="val-tag positive">+{{ "%.1f"|format(p.valorization_pct) }}% valorización est.</p>
+    {% endif %}
+    <p class="analysis-snippet">{{ (p.analysis_text or "")[:120] }}{% if (p.analysis_text or "")|length > 120 %}…{% endif %}</p>
+    <div class="card-actions">
+      <a href="/propiedad/{{ p.id }}" class="btn btn-ghost btn-sm">Ver análisis</a>
+      {% if user %}
+      <form method="post" action="/favoritos/{{ p.id }}" class="inline-form">
+        <button type="submit" class="btn btn-ghost btn-sm">{% if p.id in fav_ids %}★{% else %}♡{% endif %}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</article>

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Favoritos — Habitta ia{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Favoritos</h1>
+  <p class="muted">{% if not is_premium %}Máximo 5 en plan gratuito{% else %}Ilimitados{% endif %}</p>
+</section>
+{% if favorites %}
+<div class="card-grid">
+  {% for p in favorites %}
+  {% include "partials/property_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state card"><p>Aún no guardaste propiedades.</p><a href="/buscar" class="btn btn-primary">Buscar</a></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Registro — Habitta ia{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<div class="auth-card card">
+  <h1>Crear cuenta</h1>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  <form method="post" action="/auth/register" class="search-form">
+    <div class="field"><label>Nombre</label><input type="text" name="name" required></div>
+    <div class="field"><label>Email</label><input type="email" name="email" required></div>
+    <div class="field"><label>Contraseña</label><input type="password" name="password" minlength="6" required></div>
+    <div class="field"><label>Presupuesto (COP)</label><input type="number" name="budget" step="1000000"></div>
+    <div class="field">
+      <label>Objetivo</label>
+      <select name="goal">
+        <option value="comprar">Comprar</option>
+        <option value="arrendar">Arrendar</option>
+        <option value="invertir">Invertir</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Tipo de inmueble</label>
+      <select name="property_type_pref">
+        <option value="apartamento">Apartamento</option>
+        <option value="casa">Casa</option>
+      </select>
+    </div>
+    <fieldset class="field">
+      <legend>Zonas de interés</legend>
+      <div class="zone-grid">
+        {% for zone in zones %}
+        <label class="checkbox"><input type="checkbox" name="favorite_zones" value="{{ zone }}"> {{ zone | capitalize }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <button type="submit" class="btn btn-primary btn-block">Registrarme</button>
+  </form>
+  <p class="muted center"><a href="/auth/login">Ya tengo cuenta</a></p>
+</div>
+{% endblock %}

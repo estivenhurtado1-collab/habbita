@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Premium — Habitta ia{% endblock %}
+{% block content %}
+<section class="pricing-page">
+  <h1>Elige tu plan</h1>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <h2>Gratis</h2>
+      <p class="price">$0</p>
+      <ul>
+        <li>2 búsquedas completas / día</li>
+        <li>5 favoritos</li>
+        <li>Score IA básico</li>
+        <li>Alertas de zona</li>
+      </ul>
+      <a href="/auth/register" class="btn btn-ghost btn-block">Empezar</a>
+    </div>
+    <div class="pricing-card featured">
+      <span class="badge">Recomendado</span>
+      <h2>Premium</h2>
+      <p class="price">${{ "{:,}".format(premium_price).replace(",", ".") }} <small>COP/mes</small></p>
+      <ul>
+        <li>Búsquedas ilimitadas</li>
+        <li>Análisis IA completos</li>
+        <li>Alertas inteligentes</li>
+        <li>Comparador avanzado</li>
+        <li>Historial de precios</li>
+        <li>Reportes PDF</li>
+        <li>Favoritos ilimitados</li>
+      </ul>
+      {% if user %}
+      <form method="post" action="/premium/activar-demo">
+        <button type="submit" class="btn btn-primary btn-block">Activar demo MVP</button>
+      </form>
+      <p class="muted tiny">Pagos MercadoPago/Wompi en producción</p>
+      {% else %}
+      <a href="/auth/register" class="btn btn-primary btn-block">Registrarse y probar</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

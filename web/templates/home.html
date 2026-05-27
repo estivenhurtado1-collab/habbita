@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Inicio — Habitta ia{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Bogotá, Colombia</p>
+    <h1>Encuentra oportunidades, no solo listados</h1>
+    <p class="lead">Agregamos Finca Raíz y Metrocuadrado con score de inversión, análisis IA y alertas inteligentes.</p>
+    <div class="hero-actions">
+      <a href="/buscar" class="btn btn-primary">Buscar inmuebles</a>
+      <a href="/premium" class="btn btn-ghost">Ver Premium — ${{ "{:,}".format(premium_price).replace(",", ".") }} COP/mes</a>
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div class="stat-card">
+      <span class="stat-label">Score medio mercado</span>
+      <span class="stat-value">{{ stats.avg_score or "—" }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Plan</span>
+      <span class="stat-value">{% if is_premium %}Premium{% else %}Gratis{% endif %}</span>
+    </div>
+  </div>
+</section>
+
+{% if user and recent_searches %}
+<section class="section">
+  <h2>Búsquedas recientes</h2>
+  <ul class="simple-list">
+    {% for s in recent_searches %}
+    <li>{{ s.created_at[:10] }} — {{ s.result_count }} resultados</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="section">
+  <div class="section-head">
+    <h2>Recomendaciones IA</h2>
+    <a href="/buscar" class="link">Ver más</a>
+  </div>
+  {% if recommendations %}
+  <div class="card-grid">
+    {% for p in recommendations %}
+    {% with fav_ids = [] %}
+    {% include "partials/property_card.html" %}
+    {% endwith %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Haz tu primera búsqueda para generar recomendaciones personalizadas.</p>
+  {% endif %}
+</section>
+
+{% if stats.top_zones %}
+<section class="section">
+  <h2>Tendencias de mercado</h2>
+  <div class="trend-grid">
+    {% for z in stats.top_zones %}
+    <div class="trend-item">
+      <strong>{{ z.neighborhood }}</strong>
+      <span>{{ z.cnt }} propiedades indexadas</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

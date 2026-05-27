@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Comparador — Habitta ia{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Comparador</h1>
+  <p class="muted">Añade IDs en la URL: <code>/comparar?ids=1,2,3</code></p>
+</section>
+{% if properties %}
+<div class="compare-table-wrap">
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th></th>
+        {% for p in properties %}
+        <th><a href="/propiedad/{{ p.id }}">{{ p.title[:40] }}…</a></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Precio</td>{% for p in properties %}<td>{{ p.price | format_cop }}</td>{% endfor %}</tr>
+      <tr><td>m²</td>{% for p in properties %}<td>{{ p.area_m2 or "—" }}</td>{% endfor %}</tr>
+      <tr><td>Precio/m²</td>{% for p in properties %}<td>{% if p.price_per_m2 %}{{ p.price_per_m2 | round(0) | int | format_cop }}{% else %}—{% endif %}</td>{% endfor %}</tr>
+      <tr><td>Score IA</td>{% for p in properties %}<td class="score-cell">{{ p.score }} — {{ p.score_label }}</td>{% endfor %}</tr>
+      <tr><td>Valorización est.</td>{% for p in properties %}<td>{{ "%.1f"|format(p.valorization_pct or 0) }}%</td>{% endfor %}</tr>
+      <tr><td>Habitaciones</td>{% for p in properties %}<td>{{ p.bedrooms or "—" }}</td>{% endfor %}</tr>
+      <tr><td>Baños</td>{% for p in properties %}<td>{{ p.bathrooms or "—" }}</td>{% endfor %}</tr>
+      <tr><td>Estrato</td>{% for p in properties %}<td>{{ p.stratum or "—" }}</td>{% endfor %}</tr>
+      <tr><td>Portal</td>{% for p in properties %}<td>{{ p.portal }}</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state card"><p>Busca propiedades y compara por ID.</p></div>
+{% endif %}
+{% endblock %}

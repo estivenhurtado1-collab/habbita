@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Alertas — Habitta ia{% endblock %}
+{% block content %}
+<section class="page-header">
+  <h1>Alertas inteligentes</h1>
+  <p class="muted">Gratis: alertas básicas de zona · Premium: bajadas de precio y oportunidades</p>
+</section>
+
+<form method="post" action="/alertas" class="card form-compact">
+  <h2>Nueva alerta</h2>
+  <div class="field">
+    <label>Tipo</label>
+    <select name="alert_type">
+      <option value="nueva_zona">Nueva propiedad en zona</option>
+      <option value="bajo_precio" {% if not is_premium %}disabled{% endif %}>Bajó de precio (Premium)</option>
+      <option value="oportunidad" {% if not is_premium %}disabled{% endif %}>Oportunidad detectada (Premium)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Barrio</label>
+    <select name="zone">
+      {% for zone in zones %}
+      <option value="{{ zone }}">{{ zone | capitalize }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary">Crear alerta</button>
+</form>
+
+{% if alerts %}
+<ul class="alert-list">
+  {% for a in alerts %}
+  <li class="card">
+    <strong>{{ a.alert_type }}</strong>
+    <span class="muted">{{ a.parameters.get("zone", "") if a.parameters else "" }}</span>
+    <span class="badge">{{ "Activa" if a.active else "Pausada" }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No tienes alertas configuradas.</p>
+{% endif %}
+{% endblock %}
