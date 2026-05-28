@@ -42,18 +42,23 @@
           </svg>
         </button>
       </div>
+
+      <div class="landing-understood" id="landing-understood" aria-live="polite" hidden>
+        <span class="landing-understood-label">Entendemos:</span>
+        <div class="landing-understood-tags" id="landing-tags"></div>
+      </div>
     </form>
 
     <div class="landing-suggestions" aria-label="Ejemplos de consulta">
       <span class="landing-suggestions-label">Prueba con:</span>
-      <button type="button" class="landing-chip" data-query="Apartamento 2 habitaciones en Chapinero para compra">
-        Compra en Chapinero
+      <button type="button" class="landing-chip" data-query="Apartamento 2 hab Chapinero para compra hasta 400 millones">
+        Compra Chapinero
       </button>
-      <button type="button" class="landing-chip" data-query="Apartamento en arriendo en Usaquén 2 hab">
+      <button type="button" class="landing-chip" data-query="Apartamento en arriendo Usaquén 2 hab hasta 3 millones">
         Arriendo Usaquén
       </button>
-      <button type="button" class="landing-chip" data-query="Casa en Suba para compra">
-        Casa en Suba
+      <button type="button" class="landing-chip" data-query="Casa en Suba 3 habitaciones para compra">
+        Casa Suba
       </button>
     </div>
 
@@ -73,7 +78,7 @@
   <div class="loading-box loading-box--search">
     <div class="spinner"></div>
     <p id="landing-loading-title"><strong>Analizando tu consulta</strong></p>
-    <p class="muted">Consultando portales inmobiliarios</p>
+    <p class="muted" id="landing-loading-summary"></p>
   </div>
 </div>
 {% endblock %}
@@ -83,15 +88,55 @@
   (function () {
     const input = document.getElementById("landing-query");
     const form = document.getElementById("landing-form");
+    const understood = document.getElementById("landing-understood");
+    const tagsEl = document.getElementById("landing-tags");
+    const loadingSummary = document.getElementById("landing-loading-summary");
+    let previewTimer = null;
+
+    function renderTags(labels) {
+      if (!tagsEl || !understood) return;
+      tagsEl.innerHTML = "";
+      if (!labels || !labels.length) {
+        understood.hidden = true;
+        return;
+      }
+      labels.forEach((label) => {
+        const span = document.createElement("span");
+        span.className = "landing-tag";
+        span.textContent = label;
+        tagsEl.appendChild(span);
+      });
+      understood.hidden = false;
+    }
+
+    function refreshPreview() {
+      const q = (input?.value || "").trim();
+      if (!q) {
+        understood.hidden = true;
+        return;
+      }
+      fetch("/api/consulta/preview?q=" + encodeURIComponent(q))
+        .then((r) => r.json())
+        .then((data) => renderTags(data.labels || []))
+        .catch(() => {});
+    }
+
+    input?.addEventListener("input", () => {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(refreshPreview, 120);
+    });
+
     document.querySelectorAll(".landing-chip").forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (input) {
-          input.value = btn.dataset.query || "";
-          input.focus();
-        }
+        if (input) input.value = btn.dataset.query || "";
+        refreshPreview();
+        input?.focus();
       });
     });
+
     form?.addEventListener("submit", () => {
+      const summary = tagsEl?.textContent?.trim();
+      if (loadingSummary && summary) loadingSummary.textContent = summary;
       document.getElementById("landing-loading")?.classList.remove("hidden");
     });
   })();

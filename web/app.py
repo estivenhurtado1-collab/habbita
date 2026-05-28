@@ -237,26 +237,11 @@ def base_context(request: Request, **extra) -> dict[str, Any]:
     return ctx
 
 
-def criteria_from_natural_query(text: str, max_results: int) -> SearchCriteria:
-    from search_query import parse_search_query
+def criteria_from_natural_query(text: str, max_results: int):
+    from search.natural_query import parse_natural_query, parsed_to_search_criteria
 
-    legacy = parse_search_query(text, max_results=max_results)
-    lowered = text.lower()
-    txn = "compra"
-    if re.search(r"\barriendo\b|\barrendar\b|\balquiler\b", lowered):
-        txn = "arriendo"
-    elif re.search(r"\bcompra\b|\bventa\b|\bcomprar\b|\binversi[oó]n\b", lowered):
-        txn = "compra"
-
-    prop = legacy.property_type or "apartamento"
-    return SearchCriteria(
-        bedrooms=legacy.bedrooms,
-        zones=list(legacy.zones),
-        property_type=prop,
-        transaction_type=txn,
-        max_results=max_results,
-        portals=["fincaraiz", "metrocuadrado"],
-    )
+    parsed = parse_natural_query(text)
+    return parsed_to_search_criteria(parsed, max_results), parsed
 
 
 async def _render_search_results(
@@ -405,6 +390,13 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/api/consulta/preview")
+async def consulta_preview(q: str = Query("")) -> JSONResponse:
+    from search.natural_query import parse_natural_query
+
+    return JSONResponse(parse_natural_query(q).to_dict())
+
+
 @app.post("/consultar", response_class=HTMLResponse)
 async def consultar_submit(
     request: Request,
@@ -452,11 +444,14 @@ async def consultar_submit(
                 ),
             )
 
-    criteria = criteria_from_natural_query(text, limit)
+    criteria, _parsed = criteria_from_natural_query(text, limit)
     return await _render_search_results(
         request,
         criteria,
         bedrooms_form=str(criteria.bedrooms or ""),
+        bathrooms_form=str(criteria.bathrooms or ""),
+        price_min_form=str(criteria.price_min or ""),
+        price_max_form=str(criteria.price_max or ""),
     )
 
 

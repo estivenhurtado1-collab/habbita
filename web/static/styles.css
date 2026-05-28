@@ -1282,6 +1282,88 @@ body.landing-page .flash {
   max-width: 640px;
 }
 
+.landing-quick-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+  text-align: left;
+}
+
+.landing-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.landing-filter-label {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-width: 4.5rem;
+}
+
+.landing-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.landing-pill {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.landing-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.landing-pill.is-active {
+  background: rgba(37, 99, 235, 0.25);
+  border-color: #60a5fa;
+  color: #fff;
+}
+
+.landing-understood {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  min-height: 1.75rem;
+}
+
+.landing-understood-label {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.landing-understood-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.landing-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(134, 239, 172, 0.35);
+}
+
 .landing-query-bar {
   display: flex;
   align-items: center;
