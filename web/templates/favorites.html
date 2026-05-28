@@ -1,17 +1,156 @@
 {% extends "base.html" %}
 {% block title %}Favoritos — Habitta ia{% endblock %}
+{% block head %}
+{% if favorites %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endif %}
+{% endblock %}
 {% block content %}
 <section class="page-header">
   <h1>Favoritos</h1>
   <p class="muted">{% if not is_premium %}Máximo 5 en plan gratuito{% else %}Ilimitados{% endif %}</p>
 </section>
+
 {% if favorites %}
-<div class="card-grid">
-  {% for p in favorites %}
-  {% include "partials/property_card.html" %}
-  {% endfor %}
-</div>
+<section class="section compare-map-section favorites-map-section">
+  <h2>Mapa de favoritos</h2>
+  <p class="muted">Ubicación aproximada por barrio de tus inmuebles guardados.</p>
+  <div
+    id="favorites-map"
+    class="map-container compare-map"
+    data-habitta-map
+    data-markers-src="favorites-map-markers-data"
+  ></div>
+  <script type="application/json" id="favorites-map-markers-data">{{ favorite_marker_list | tojson }}</script>
+  <ul class="compare-map-legend">
+    {% for p in favorites %}
+    <li>
+      <span class="legend-dot" style="background: {{ ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed'][loop.index0 % 5] }}"></span>
+      {{ loop.index }}. {{ p.neighborhood or 'Bogotá' }}{% if p.price %} — {{ p.price | format_cop }}{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<form id="favorites-bulk-form" method="post" action="/favoritos/quitar" class="favorites-bulk-form">
+  <div class="favorites-toolbar">
+    <button type="button" class="btn btn-ghost btn-sm" id="fav-toggle-select" aria-pressed="false">
+      Seleccionar
+    </button>
+    <button type="button" class="btn btn-ghost btn-sm fav-toolbar-extra" id="fav-select-all" hidden>
+      Seleccionar todos
+    </button>
+    <button type="button" class="btn btn-ghost btn-sm fav-toolbar-extra" id="fav-clear-all" hidden>
+      Limpiar selección
+    </button>
+    <button
+      type="submit"
+      class="btn btn-primary btn-sm fav-toolbar-extra"
+      id="fav-remove-selected"
+      hidden
+      disabled
+    >
+      Borrar
+    </button>
+    <span class="fav-selection-count muted fav-toolbar-extra" id="fav-selection-count" hidden></span>
+  </div>
+
+  <div class="card-grid favorites-grid" id="favorites-grid">
+    {% for p in favorites %}
+    <div class="favorite-card-wrap" data-prop-id="{{ p.id }}">
+      <label class="fav-select-label" title="Seleccionar para borrar">
+        <input type="checkbox" class="fav-select-check" name="prop_ids" value="{{ p.id }}">
+        <span class="fav-check-ui" aria-hidden="true"></span>
+      </label>
+      {% with hide_fav_button=true %}
+      {% include "partials/property_card.html" %}
+      {% endwith %}
+    </div>
+    {% endfor %}
+  </div>
+</form>
 {% else %}
 <div class="empty-state card"><p>Aún no guardaste propiedades.</p><a href="/buscar" class="btn btn-primary">Buscar</a></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if favorites %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>window.habittaInitMaps && window.habittaInitMaps();</script>
+<script>
+  const grid = document.getElementById("favorites-grid");
+  const toggleBtn = document.getElementById("fav-toggle-select");
+  const selectAllBtn = document.getElementById("fav-select-all");
+  const clearAllBtn = document.getElementById("fav-clear-all");
+  const removeBtn = document.getElementById("fav-remove-selected");
+  const countEl = document.getElementById("fav-selection-count");
+  const extras = document.querySelectorAll(".fav-toolbar-extra");
+  const checks = () => Array.from(document.querySelectorAll(".fav-select-check"));
+
+  function updateSelectionUI() {
+    const selected = checks().filter((c) => c.checked);
+    const n = selected.length;
+    removeBtn.disabled = n === 0;
+    removeBtn.textContent = n ? `Borrar (${n})` : "Borrar";
+    countEl.textContent = n ? `${n} seleccionado(s)` : "";
+    document.querySelectorAll(".favorite-card-wrap").forEach((wrap) => {
+      const cb = wrap.querySelector(".fav-select-check");
+      wrap.classList.toggle("is-selected", cb && cb.checked);
+    });
+  }
+
+  function setSelectionMode(on) {
+    grid.classList.toggle("selection-mode", on);
+    toggleBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    toggleBtn.textContent = on ? "Cancelar" : "Seleccionar";
+    extras.forEach((el) => { el.hidden = !on; });
+    if (!on) {
+      checks().forEach((c) => { c.checked = false; });
+    }
+    updateSelectionUI();
+  }
+
+  toggleBtn?.addEventListener("click", () => {
+    setSelectionMode(!grid.classList.contains("selection-mode"));
+  });
+
+  selectAllBtn?.addEventListener("click", () => {
+    checks().forEach((c) => { c.checked = true; });
+    updateSelectionUI();
+  });
+
+  clearAllBtn?.addEventListener("click", () => {
+    checks().forEach((c) => { c.checked = false; });
+    updateSelectionUI();
+  });
+
+  checks().forEach((cb) => {
+    cb.addEventListener("change", updateSelectionUI);
+  });
+
+  document.querySelectorAll(".favorite-card-wrap").forEach((wrap) => {
+    wrap.addEventListener("click", (e) => {
+      if (!grid.classList.contains("selection-mode")) return;
+      if (e.target.closest("a, button")) return;
+      const cb = wrap.querySelector(".fav-select-check");
+      if (!cb) return;
+      if (e.target === cb || e.target.closest(".fav-select-label")) return;
+      cb.checked = !cb.checked;
+      updateSelectionUI();
+    });
+  });
+
+  removeBtn?.addEventListener("click", (e) => {
+    const n = checks().filter((c) => c.checked).length;
+    if (!n) {
+      e.preventDefault();
+      return;
+    }
+    if (!confirm(`¿Borrar ${n} inmueble(s) de favoritos?`)) {
+      e.preventDefault();
+    }
+  });
+</script>
 {% endif %}
 {% endblock %}

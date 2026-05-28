@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 # Venta apartamento/casa Bogotá — fuera de rango suele ser admin, m², etc.
 MIN_SALE_COP = 45_000_000
 MAX_SALE_COP = 20_000_000_000
+MIN_RENT_COP = 400_000
+MAX_RENT_COP = 30_000_000
 
 _PRICE_RE = re.compile(
     r"\$\s*([\d]{1,3}(?:[.\s]\d{3})+|\d{6,})",
@@ -24,7 +26,13 @@ _BAD_CONTEXT = re.compile(
 _DESDE_CONTEXT = re.compile(r"\bdesde\b", re.IGNORECASE)
 
 
-def parse_price_value(price_text: str) -> Optional[int]:
+def price_bounds(transaction_type: str = "compra") -> tuple[int, int]:
+    if transaction_type == "arriendo":
+        return MIN_RENT_COP, MAX_RENT_COP
+    return MIN_SALE_COP, MAX_SALE_COP
+
+
+def parse_price_value(price_text: str, *, transaction_type: str = "compra") -> Optional[int]:
     if not price_text:
         return None
     digits = re.sub(r"[^\d]", "", price_text)
@@ -34,7 +42,8 @@ def parse_price_value(price_text: str) -> Optional[int]:
         value = int(digits)
     except ValueError:
         return None
-    if value < MIN_SALE_COP or value > MAX_SALE_COP:
+    lo, hi = price_bounds(transaction_type)
+    if value < lo or value > hi:
         return None
     return value
 
@@ -60,33 +69,51 @@ def _score_candidate(
     context: str,
     *,
     in_price_element: bool,
+    transaction_type: str = "compra",
 ) -> int:
-    if value < MIN_SALE_COP or value > MAX_SALE_COP:
+    lo, hi = price_bounds(transaction_type)
+    if value < lo or value > hi:
         return -10_000
     score = 0
     if in_price_element:
         score += 120
-    if _bad_near_amount(context, raw):
+    if transaction_type == "compra" and _bad_near_amount(context, raw):
         score -= 200
     if _DESDE_CONTEXT.search(context[max(0, context.find(raw) - 12) : context.find(raw) + 1]):
         score -= 40
-    # Precio de venta suele ser el monto principal (no cuotas pequeñas)
-    if value >= 120_000_000:
-        score += 25
-    if value >= 250_000_000:
-        score += 15
-    # Admin / parqueadero mensual suele ser < 5M
-    if value < 8_000_000:
-        score -= 80
+    if transaction_type == "arriendo":
+        if 800_000 <= value <= 12_000_000:
+            score += 40
+        if re.search(r"arriendo|alquiler|canon|mensual", context, re.I):
+            score += 50
+        if value < 600_000:
+            score -= 60
+    else:
+        if value >= 120_000_000:
+            score += 25
+        if value >= 250_000_000:
+            score += 15
+        if value < 8_000_000:
+            score -= 80
     return score
 
 
-def pick_best_price(candidates: List[Tuple[str, int, str, bool]]) -> Tuple[str, Optional[int]]:
-    """Elige el precio de venta más probable entre varios candidatos."""
+def pick_best_price(
+    candidates: List[Tuple[str, int, str, bool]],
+    *,
+    transaction_type: str = "compra",
+) -> Tuple[str, Optional[int]]:
+    """Elige el precio principal (venta o canon mensual) entre candidatos."""
     if not candidates:
         return "", None
     scored = [
-        (raw, value, _score_candidate(raw, value, ctx, in_price_element=in_el))
+        (
+            raw,
+            value,
+            _score_candidate(
+                raw, value, ctx, in_price_element=in_el, transaction_type=transaction_type
+            ),
+        )
         for raw, value, ctx, in_el in candidates
     ]
     scored.sort(key=lambda x: x[2], reverse=True)
@@ -96,7 +123,9 @@ def pick_best_price(candidates: List[Tuple[str, int, str, bool]]) -> Tuple[str, 
     return best_raw, best_val
 
 
-def extract_prices_from_text(text: str) -> List[Tuple[str, int, str]]:
+def extract_prices_from_text(
+    text: str, *, transaction_type: str = "compra"
+) -> List[Tuple[str, int, str]]:
     """Devuelve [(raw, value, contexto_40_chars), ...]."""
     if not text:
         return []
@@ -104,7 +133,7 @@ def extract_prices_from_text(text: str) -> List[Tuple[str, int, str]]:
     seen: set[int] = set()
     for match in _PRICE_RE.finditer(text):
         raw = f"$ {match.group(1)}"
-        value = parse_price_value(raw)
+        value = parse_price_value(raw, transaction_type=transaction_type)
         if not value or value in seen:
             continue
         seen.add(value)
@@ -115,10 +144,11 @@ def extract_prices_from_text(text: str) -> List[Tuple[str, int, str]]:
     return found
 
 
-def extract_price_text(text: str) -> str:
+def extract_price_text(text: str, *, transaction_type: str = "compra") -> str:
     """Compatibilidad: mejor candidato en texto plano."""
     raw, _ = pick_best_price(
-        [(r, v, c, False) for r, v, c in extract_prices_from_text(text)]
+        [(r, v, c, False) for r, v, c in extract_prices_from_text(text, transaction_type=transaction_type)],
+        transaction_type=transaction_type,
     )
     return raw
 
@@ -128,6 +158,7 @@ def extract_price_from_card(
     card_text: str,
     *,
     strict: bool = False,
+    transaction_type: str = "compra",
 ) -> Tuple[str, Optional[int]]:
     """Precio desde nodos DOM de la tarjeta y, si falla, del texto."""
     candidates: List[Tuple[str, int, str, bool]] = []
@@ -144,11 +175,15 @@ def extract_price_from_card(
         for i in range(min(price_nodes.count(), 6)):
             node = price_nodes.nth(i)
             node_text = (node.inner_text() or "").strip()
-            for raw, value, ctx in extract_prices_from_text(node_text):
+            for raw, value, ctx in extract_prices_from_text(
+                node_text, transaction_type=transaction_type
+            ):
                 candidates.append((raw, value, ctx, True))
 
     if not strict:
-        for raw, value, ctx in extract_prices_from_text(card_text):
+        for raw, value, ctx in extract_prices_from_text(
+            card_text, transaction_type=transaction_type
+        ):
             candidates.append((raw, value, ctx, False))
 
     # Deduplicar por valor
@@ -158,7 +193,7 @@ def extract_price_from_card(
         if prev is None or (in_el and not prev[3]):
             by_value[value] = (raw, value, ctx, in_el)
     unique = list(by_value.values())
-    raw, val = pick_best_price(unique)
+    raw, val = pick_best_price(unique, transaction_type=transaction_type)
     return raw, val
 
 
@@ -241,12 +276,17 @@ def lookup_price(
     listing_url: str,
     anchor=None,
     card_text: str = "",
+    *,
+    transaction_type: str = "",
 ) -> Tuple[str, Optional[int]]:
     strict = "/proyectos-vivienda/" in (listing_url or "").lower()
     key = _listing_key(listing_url)
+    txn = transaction_type or (
+        "arriendo" if "arriendo" in (listing_url or "").lower() or "alquiler" in (listing_url or "").lower() else "compra"
+    )
 
     def accept(raw: str) -> Tuple[str, Optional[int]]:
-        val = parse_price_value(raw)
+        val = parse_price_value(raw, transaction_type=txn)
         if not val:
             return "", None
         if strict and _DESDE_CONTEXT.search(raw):
@@ -261,8 +301,10 @@ def lookup_price(
             if v:
                 return r, v
     if anchor is not None:
-        return extract_price_from_card(anchor, card_text, strict=strict)
+        return extract_price_from_card(
+            anchor, card_text, strict=strict, transaction_type=txn
+        )
     if strict:
         return "", None
-    raw = extract_price_text(card_text)
-    return raw, parse_price_value(raw)
+    raw = extract_price_text(card_text, transaction_type=txn)
+    return raw, parse_price_value(raw, transaction_type=txn)

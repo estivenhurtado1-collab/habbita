@@ -35,6 +35,21 @@ ZONE_VALORIZATION: dict[str, float] = {
 
 TRANSIT_ZONES = {"chapinero", "teusaquillo", "usaquen", "cedritos", "engativa"}
 
+# Canon mensual estimado COP/m² (arriendo)
+ZONE_RENT_AVG_M2: dict[str, float] = {
+    "chapinero": 42_000,
+    "usaquen": 48_000,
+    "chico": 50_000,
+    "cedritos": 40_000,
+    "teusaquillo": 38_000,
+    "suba": 28_000,
+    "kennedy": 24_000,
+    "fontibon": 22_000,
+    "engativa": 26_000,
+    "modelia": 30_000,
+    "bogota": 32_000,
+}
+
 
 @dataclass
 class IntelResult:
@@ -64,7 +79,17 @@ def score_label_from_score(score: int) -> str:
     return "Posible sobreprecio"
 
 
-def compute_intel(
+def rental_score_label(score: int) -> str:
+    if score >= 80:
+        return "Muy conveniente"
+    if score >= 65:
+        return "Buen precio"
+    if score >= 45:
+        return "Precio de mercado"
+    return "Canon elevado"
+
+
+def compute_rental_intel(
     price: Optional[int],
     area_m2: Optional[float],
     neighborhood: str,
@@ -72,6 +97,79 @@ def compute_intel(
     locality: str = "Bogotá",
     portal: str = "",
 ) -> IntelResult:
+    zone = detect_zone(f"{neighborhood} {locality}")
+    avg_m2 = ZONE_RENT_AVG_M2.get(zone, ZONE_RENT_AVG_M2["bogota"])
+
+    price_per_m2: Optional[float] = None
+    vs_zone_pct: Optional[float] = None
+    if price and area_m2 and area_m2 > 0:
+        price_per_m2 = price / area_m2
+        vs_zone_pct = ((price_per_m2 - avg_m2) / avg_m2) * 100
+
+    score = 52
+    if vs_zone_pct is not None:
+        if vs_zone_pct <= -12:
+            score += 26
+        elif vs_zone_pct <= -5:
+            score += 16
+        elif vs_zone_pct <= 8:
+            score += 4
+        elif vs_zone_pct <= 18:
+            score -= 14
+        else:
+            score -= 24
+
+    if zone in TRANSIT_ZONES:
+        score += 10
+    if bedrooms and bedrooms >= 2:
+        score += 5
+    if portal == "metrocuadrado":
+        score += 2
+
+    score = max(0, min(100, score))
+    label = rental_score_label(score)
+
+    zone_name = zone.capitalize() if zone != "bogota" else "Bogotá"
+    if vs_zone_pct is not None and vs_zone_pct < 0:
+        analysis = (
+            f"Canon por m² por debajo del promedio de arriendo en {zone_name} "
+            f"(~{abs(vs_zone_pct):.0f}%). Buena relación precio-ubicación para vivir."
+        )
+    elif vs_zone_pct is not None and vs_zone_pct > 12:
+        analysis = (
+            f"El canon por m² supera el promedio de {zone_name} en {vs_zone_pct:.0f}%. "
+            "Compara opciones similares en la misma zona."
+        )
+    else:
+        analysis = (
+            f"Canon alineado con el mercado de arriendo en {zone_name}. "
+            "Revisa administración y servicios incluidos."
+        )
+
+    return IntelResult(
+        score=score,
+        score_label=label,
+        valorization_pct=0.0,
+        analysis_text=analysis,
+        price_per_m2=price_per_m2,
+        vs_zone_pct=vs_zone_pct,
+    )
+
+
+def compute_intel(
+    price: Optional[int],
+    area_m2: Optional[float],
+    neighborhood: str,
+    bedrooms: Optional[int],
+    locality: str = "Bogotá",
+    portal: str = "",
+    *,
+    transaction_type: str = "compra",
+) -> IntelResult:
+    if transaction_type == "arriendo":
+        return compute_rental_intel(
+            price, area_m2, neighborhood, bedrooms, locality, portal
+        )
     zone = detect_zone(f"{neighborhood} {locality}")
     avg_m2 = ZONE_AVG_M2.get(zone, ZONE_AVG_M2["bogota"])
     val_trend = ZONE_VALORIZATION.get(zone, 5.0)

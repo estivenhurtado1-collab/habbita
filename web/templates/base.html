@@ -1,72 +1,118 @@
 <!DOCTYPE html>
+
 <html lang="es">
+
 <head>
+
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>{% block title %}Habitta ia{% endblock %}</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
+
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="/static/styles.css">
+
   {% block head %}{% endblock %}
+
 </head>
+
 <body class="{% block body_class %}{% endblock %}">
+
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Navegación principal">
-      <a href="/" class="brand">
-        <span class="brand-mark">H</span>
-        <span class="brand-text">Habitta <em>ia</em></span>
-      </a>
-      <nav class="sidebar-nav">
-        <a href="/" class="nav-item {% if request.url.path == '/' %}active{% endif %}">Inicio</a>
-        <a href="/buscar" class="nav-item {% if '/buscar' in request.url.path %}active{% endif %}">Buscar</a>
-        <a href="/favoritos" class="nav-item">Favoritos</a>
-        <a href="/alertas" class="nav-item">Alertas</a>
-        <a href="/mapa" class="nav-item">Mapa</a>
-        <a href="/comparar" class="nav-item">Comparar</a>
-        {% if is_premium %}
-        <span class="nav-badge premium">Premium</span>
-        {% else %}
-        <a href="/premium" class="nav-item nav-cta">Premium</a>
-        {% endif %}
-      </nav>
-      <div class="sidebar-footer">
-        {% if user %}
-        <a href="/perfil" class="nav-item">{{ user.name }}</a>
-        <a href="/auth/logout" class="nav-item muted">Salir</a>
-        {% else %}
-        <a href="/auth/login" class="btn btn-ghost btn-sm">Iniciar sesión</a>
-        <a href="/auth/register" class="btn btn-primary btn-sm">Registrarse</a>
-        {% endif %}
+
+    <header class="topbar" aria-label="Navegación principal">
+
+      <div class="topbar-inner">
+
+        <a href="/" class="brand">
+
+          <span class="brand-mark">H</span>
+
+          <span class="brand-text">Habitta <em>ia</em></span>
+
+        </a>
+
+        <button type="button" class="topbar-toggle" aria-expanded="false" aria-controls="topbar-menu">
+
+          Menú
+
+        </button>
+
+        <div class="topbar-menu" id="topbar-menu">
+
+          <nav class="topbar-nav">
+
+            <a href="/inicio" class="nav-item {% if request.url.path == '/inicio' %}active{% endif %}">Panel</a>
+
+            <a href="/buscar" class="nav-item {% if '/buscar' in request.url.path %}active{% endif %}">Buscar</a>
+
+            <a href="/comparar" class="nav-item {% if '/comparar' in request.url.path %}active{% endif %}">Comparar</a>
+
+            <a href="/favoritos" class="nav-item {% if '/favoritos' in request.url.path %}active{% endif %}">Favoritos</a>
+
+            {% if is_premium %}
+
+            <span class="nav-badge premium">Premium</span>
+
+            {% else %}
+
+            <a href="/premium" class="nav-item nav-cta {% if '/premium' in request.url.path %}active{% endif %}">Premium</a>
+
+            {% endif %}
+
+          </nav>
+
+          <div class="topbar-actions">
+
+            {% if user %}
+
+            <a href="/perfil" class="nav-item nav-user">{{ user.name }}</a>
+
+            <a href="/auth/logout" class="nav-item muted">Salir</a>
+
+            {% else %}
+
+            <a href="/auth/login" class="btn btn-top-login btn-sm">Iniciar sesión</a>
+
+            <a href="/auth/register" class="btn btn-top-register btn-sm">Registrarse</a>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
       </div>
-    </aside>
+
+    </header>
+
+
 
     <main class="main-content">
+
       {% if request.session.get('flash') %}
+
       <div class="flash" role="status">{{ request.session.pop('flash') }}</div>
+
       {% endif %}
+
       {% block content %}{% endblock %}
+
     </main>
 
-    <nav class="bottom-nav" aria-label="Navegación móvil">
-      <a href="/" class="bottom-item {% if request.url.path == '/' %}active{% endif %}">
-        <span class="ico">⌂</span><span>Inicio</span>
-      </a>
-      <a href="/buscar" class="bottom-item {% if '/buscar' in request.url.path %}active{% endif %}">
-        <span class="ico">⌕</span><span>Buscar</span>
-      </a>
-      <a href="/favoritos" class="bottom-item">
-        <span class="ico">♥</span><span>Favoritos</span>
-      </a>
-      <a href="/alertas" class="bottom-item">
-        <span class="ico">◉</span><span>Alertas</span>
-      </a>
-      <a href="/perfil" class="bottom-item">
-        <span class="ico">◎</span><span>Perfil</span>
-      </a>
-    </nav>
   </div>
+
   <script src="/static/app.js"></script>
+
   {% block scripts %}{% endblock %}
+
 </body>
+
 </html>
+

@@ -1,21 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Inicio — Habitta ia{% endblock %}
+{% block title %}Panel — Habitta ia{% endblock %}
 {% block head %}
 {% if home_map_has_markers %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 {% endif %}
 {% endblock %}
 {% block content %}
-<section class="hero hero-single">
-  <p class="eyebrow">Bogotá, Colombia</p>
-  <h1>Encuentra Oportunidades Inmobiliarias</h1>
-  <p class="lead">Analizamos propiedades de los principales portales inmobiliarios de Colombia para identificar oportunidades de inversión y comparar los mejores precios de compra y arriendo.</p>
+<section class="dashboard-header">
+  <h1>Tu panel</h1>
+  <p class="muted">Recomendaciones, búsquedas recientes y favoritos en un solo lugar.</p>
   <div class="hero-actions">
-    <a href="/buscar" class="btn btn-primary">Buscar inmuebles</a>
-    <a href="/comparar" class="btn btn-ghost">Comparar Inmuebles</a>
-    {% if not is_premium %}
-    <a href="/premium" class="btn btn-ghost">Premium</a>
-    {% endif %}
+    <a href="/buscar" class="btn btn-primary">Nueva búsqueda</a>
+    <a href="/comparar" class="btn btn-ghost">Comparar inmuebles</a>
   </div>
 </section>
 
@@ -71,7 +67,7 @@
   {% else %}
   <div class="empty-state card">
     <p>Haz tu primera búsqueda para ver recomendaciones con foto y score.</p>
-    <a href="/buscar" class="btn btn-primary btn-sm">Ir al buscador</a>
+    <a href="/" class="btn btn-primary btn-sm">Consultar ahora</a>
   </div>
   {% endif %}
 </section>

@@ -15,6 +15,16 @@
     <input type="email" value="{{ user.email }}" disabled>
   </div>
   <div class="field">
+    <label>¿Dónde vives? (barrio en Bogotá)</label>
+    <select name="home_zone">
+      <option value="">— No indicar —</option>
+      {% for zone in zones %}
+      <option value="{{ zone }}" {% if user.home_zone == zone %}selected{% endif %}>{{ zone | capitalize }}</option>
+      {% endfor %}
+    </select>
+    <p class="muted tiny">Aparece en el mapa del inicio junto a tus favoritos.</p>
+  </div>
+  <div class="field">
     <label>Presupuesto aprox. (COP)</label>
     <input type="number" name="budget" value="{{ user.budget or '' }}" step="1000000">
   </div>

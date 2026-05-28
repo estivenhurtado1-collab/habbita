@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Habitta ia — Oportunidades inmobiliarias{% endblock %}
+{% block body_class %}landing-page{% endblock %}
+{% block content %}
+<section class="landing-hero" aria-labelledby="landing-title">
+  <div class="landing-hero-inner">
+    <p class="landing-eyebrow">Bogotá, Colombia</p>
+    <h1 id="landing-title">
+      Encuentra <span class="landing-accent">Oportunidades</span> Inmobiliarias
+    </h1>
+    <p class="landing-lead">
+      Analizamos propiedades de los principales portales inmobiliarios de Colombia para identificar oportunidades de inversión y comparar los mejores precios de compra y arriendo.
+    </p>
+
+    {% if error %}
+    <div class="landing-alert alert alert-error" role="alert">
+      <p>{{ error }}</p>
+      {% if show_premium_cta %}<a href="/premium" class="btn btn-primary btn-sm">Ver Premium</a>{% endif %}
+      {% if show_login_cta %}<a href="/auth/register" class="btn btn-primary btn-sm">Crear cuenta gratis</a>{% endif %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/consultar" class="landing-query-form" id="landing-form">
+      <div class="landing-query-bar">
+        <span class="landing-query-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/>
+          </svg>
+        </span>
+        <input
+          type="text"
+          name="query"
+          id="landing-query"
+          class="landing-query-input"
+          placeholder="Ej: apartamento 2 hab en Chapinero para arriendo"
+          autocomplete="off"
+          required
+        >
+        <button type="submit" class="landing-query-submit" aria-label="Buscar o analizar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M13 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </form>
+
+    <div class="landing-suggestions" aria-label="Ejemplos de consulta">
+      <span class="landing-suggestions-label">Prueba con:</span>
+      <button type="button" class="landing-chip" data-query="Apartamento 2 habitaciones en Chapinero para compra">
+        Compra en Chapinero
+      </button>
+      <button type="button" class="landing-chip" data-query="Apartamento en arriendo en Usaquén 2 hab">
+        Arriendo Usaquén
+      </button>
+      <button type="button" class="landing-chip" data-query="Casa en Suba para compra">
+        Casa en Suba
+      </button>
+    </div>
+
+    <div class="landing-secondary">
+      <a href="/buscar" class="landing-secondary-link">Búsqueda avanzada</a>
+      <span class="landing-secondary-dot" aria-hidden="true">·</span>
+      <a href="/comparar" class="landing-secondary-link">Comparar inmuebles</a>
+      {% if user and app_started %}
+      <span class="landing-secondary-dot" aria-hidden="true">·</span>
+      <a href="/inicio" class="landing-secondary-link">Ir a tu panel</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<div id="landing-loading" class="loading-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="landing-loading-title">
+  <div class="loading-box loading-box--search">
+    <div class="spinner"></div>
+    <p id="landing-loading-title"><strong>Analizando tu consulta</strong></p>
+    <p class="muted">Consultando portales inmobiliarios</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const input = document.getElementById("landing-query");
+    const form = document.getElementById("landing-form");
+    document.querySelectorAll(".landing-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (input) {
+          input.value = btn.dataset.query || "";
+          input.focus();
+        }
+      });
+    });
+    form?.addEventListener("submit", () => {
+      document.getElementById("landing-loading")?.classList.remove("hidden");
+    });
+  })();
+</script>
+{% endblock %}

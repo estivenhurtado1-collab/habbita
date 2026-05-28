@@ -73,7 +73,9 @@ def _process_listings(
     for listing in listings:
         if len(per_portal) >= limit:
             break
-        data = listing_to_property_dict(listing, portal)
+        data = listing_to_property_dict(
+            listing, portal, transaction_type=criteria.transaction_type
+        )
         if data["fingerprint"] in seen_fp:
             continue
         if not _passes_filters(data, criteria):

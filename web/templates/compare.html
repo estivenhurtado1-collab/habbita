@@ -1,35 +1,342 @@
 {% extends "base.html" %}
 {% block title %}Comparador — Habitta ia{% endblock %}
+{% block head %}
+{% if properties %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endif %}
+{% endblock %}
 {% block content %}
 <section class="page-header">
   <h1>Comparador</h1>
-  <p class="muted">Añade IDs en la URL: <code>/comparar?ids=1,2,3</code></p>
+  <p class="muted">
+    Pega enlaces de <strong>Finca Raíz</strong> o <strong>Metrocuadrado</strong>.
+    {% if is_premium %}
+    Hasta {{ compare_limit_premium }} inmuebles.
+    {% else %}
+    Hasta {{ compare_limit_free }} inmuebles ({{ compare_limit_premium }} con Premium).
+    {% endif %}
+  </p>
 </section>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% set compare_txn = compare_transaction or (properties[0].get('transaction_type', 'compra') if properties else 'compra') %}
+<form class="card compare-form" method="post" action="/comparar" id="compare-form">
+  <div class="search-field-group compare-txn-group">
+    <span class="search-field-label">Tipo de comparación</span>
+    <div class="pill-row" role="group">
+      <label class="pill-option">
+        <input type="radio" name="transaction_type" value="compra" {% if compare_txn != 'arriendo' %}checked{% endif %}>
+        <span>Compra</span>
+      </label>
+      <label class="pill-option">
+        <input type="radio" name="transaction_type" value="arriendo" {% if compare_txn == 'arriendo' %}checked{% endif %}>
+        <span>Arriendo</span>
+      </label>
+    </div>
+    <p class="muted tiny">
+      {% if compare_txn == 'arriendo' %}
+      Análisis por canon mensual, precio/m² y ubicación.
+      {% else %}
+      Análisis por precio de venta, valorización y score de inversión.
+      {% endif %}
+    </p>
+  </div>
+  <p class="compare-form-intro muted">Pega el enlace de cada anuncio en su campo.</p>
+  <div
+    id="compare-url-list"
+    class="compare-url-list"
+    data-max="{{ compare_limit }}"
+  >
+    {% for url in compare_urls %}
+    <div class="compare-url-row">
+      <label for="compare-url-{{ loop.index }}">Enlace {{ loop.index }}</label>
+      <input
+        type="text"
+        inputmode="url"
+        id="compare-url-{{ loop.index }}"
+        name="urls"
+        value="{{ url }}"
+        placeholder="https://www.fincaraiz.com.co/... o https://www.metrocuadrado.com/..."
+        autocomplete="off"
+      >
+    </div>
+    {% endfor %}
+  </div>
+  <div class="compare-form-actions">
+    <button type="button" class="btn btn-ghost btn-sm" id="compare-add-url" aria-label="Añadir otro enlace">
+      + Añadir enlace
+    </button>
+    <span class="muted tiny compare-url-hint" id="compare-url-hint"></span>
+  </div>
+  <p class="muted tiny">También puedes comparar desde búsqueda: <code>/comparar?ids=1,2</code></p>
+  <button type="submit" class="btn btn-primary">Comparar</button>
+  {% if not is_premium %}
+  <a href="/premium" class="btn btn-ghost">Comparar hasta {{ compare_limit_premium }} con Premium</a>
+  {% endif %}
+</form>
+
+{% if compare_history %}
+<section class="section compare-history-section">
+  <h2>Historial de comparaciones</h2>
+  <p class="muted tiny">Tus comparaciones recientes. Pulsa <strong>Ver de nuevo</strong> para reabrirlas.</p>
+  <ul class="compare-history-list">
+    {% for h in compare_history %}
+    <li class="compare-history-item card">
+      <div class="compare-history-main">
+        <div class="compare-history-meta">
+          <time datetime="{{ h.created_at }}">{{ h.created_at[:10] }}{% if h.created_at|length > 10 %} {{ h.created_at[11:16] }}{% endif %}</time>
+          <span class="compare-history-badge">{{ h.item_count }} inmueble{% if h.item_count != 1 %}s{% endif %}</span>
+        </div>
+        <p class="compare-history-summary">{{ h.summary }}</p>
+      </div>
+      <a href="/comparar?ids={{ h.ids_param }}" class="btn btn-ghost btn-sm">Ver de nuevo</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if not user %}
+  <p class="muted tiny">El historial se guarda en este navegador. <a href="/auth/registro">Crea cuenta</a> para conservarlo al iniciar sesión.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if url_errors %}
+<div class="alert alert-error">
+  <p>No se pudieron leer algunos enlaces:</p>
+  <ul>
+    {% for url, msg in url_errors.items() %}
+    <li><span class="tiny">{{ url[:70] }}…</span> — {{ msg }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if properties %}
+<section class="section compare-map-section">
+  <h2>Mapa de la comparación</h2>
+  <p class="muted">Ubicación aproximada por barrio de cada inmueble que estás comparando.</p>
+  <div id="compare-map" class="map-container compare-map"></div>
+  <ul class="compare-map-legend">
+    {% for p in properties %}
+    <li>
+      <span class="legend-dot" style="background: {{ ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed'][loop.index0 % 5] }}"></span>
+      {{ loop.index }}. {{ p.neighborhood or 'Bogotá' }}{% if p.price %} — {{ p.price | format_cop }}{% if compare_txn == 'arriendo' %}/mes{% endif %}{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
 <div class="compare-table-wrap">
   <table class="compare-table">
     <thead>
       <tr>
         <th></th>
         {% for p in properties %}
-        <th><a href="/propiedad/{{ p.id }}">{{ p.title[:40] }}…</a></th>
+        <th class="compare-col-head">
+          <div class="compare-card-img {% if not p.image_url %}placeholder-img{% endif %}">
+            {% if p.image_url %}
+            <img
+              src="{{ p.image_url | image_display_url }}"
+              data-fallback="{{ p.image_url }}"
+              alt="{{ p.title or 'Inmueble' }}"
+              loading="lazy"
+              onerror="if(this.dataset.fallback&&!this.dataset.retried){this.dataset.retried=1;this.src=this.dataset.fallback}else{this.closest('.compare-card-img').classList.add('placeholder-img');this.remove()}"
+            >
+            {% endif %}
+          </div>
+          {% if p.id %}
+          <a href="/propiedad/{{ p.id }}" class="compare-title">{{ (p.title or 'Inmueble')[:45] }}</a>
+          {% else %}
+          <span class="compare-title">{{ (p.title or 'Inmueble')[:45] }}</span>
+          {% endif %}
+          <div class="portal-tag {{ p.portal }}">{{ p.portal }}</div>
+        </th>
         {% endfor %}
       </tr>
     </thead>
     <tbody>
-      <tr><td>Precio</td>{% for p in properties %}<td>{{ p.price | format_cop }}</td>{% endfor %}</tr>
-      <tr><td>m²</td>{% for p in properties %}<td>{{ p.area_m2 or "—" }}</td>{% endfor %}</tr>
-      <tr><td>Precio/m²</td>{% for p in properties %}<td>{% if p.price_per_m2 %}{{ p.price_per_m2 | round(0) | int | format_cop }}{% else %}—{% endif %}</td>{% endfor %}</tr>
-      <tr><td>Score IA</td>{% for p in properties %}<td class="score-cell">{{ p.score }} — {{ p.score_label }}</td>{% endfor %}</tr>
-      <tr><td>Valorización est.</td>{% for p in properties %}<td>{{ "%.1f"|format(p.valorization_pct or 0) }}%</td>{% endfor %}</tr>
-      <tr><td>Habitaciones</td>{% for p in properties %}<td>{{ p.bedrooms or "—" }}</td>{% endfor %}</tr>
-      <tr><td>Baños</td>{% for p in properties %}<td>{{ p.bathrooms or "—" }}</td>{% endfor %}</tr>
-      <tr><td>Estrato</td>{% for p in properties %}<td>{{ p.stratum or "—" }}</td>{% endfor %}</tr>
-      <tr><td>Portal</td>{% for p in properties %}<td>{{ p.portal }}</td>{% endfor %}</tr>
+      <tr>
+        <td>{% if compare_txn == 'arriendo' %}Canon mensual{% else %}Precio venta{% endif %}</td>
+        {% for p in properties %}
+        <td>{% if p.price %}{{ p.price | format_cop }}{% if compare_txn == 'arriendo' %} / mes{% endif %}{% else %}<span class="muted">Ver en portal</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td>Precio / m²</td>
+        {% for p in properties %}
+        <td>
+          {% if p.price_per_m2 %}
+          {{ p.price_per_m2 | round(0) | int | format_cop }}{% if compare_txn == 'arriendo' %} / m²{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td>Ubicación</td>
+        {% for p in properties %}
+        <td>{{ p.neighborhood or 'Bogotá' }}{% if p.locality %}, {{ p.locality }}{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% if compare_txn != 'arriendo' %}
+      <tr>
+        <td>Administración</td>
+        {% for p in properties %}
+        <td>{% if p.admin_fee %}{{ p.admin_fee | format_cop }}{% else %}—{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% else %}
+      <tr>
+        <td>Administración</td>
+        {% for p in properties %}
+        <td>{% if p.admin_fee %}{{ p.admin_fee | format_cop }} / mes{% else %}—{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+      <tr>
+        <td>Habitaciones</td>
+        {% for p in properties %}<td>{{ p.bedrooms or "—" }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td>Baños</td>
+        {% for p in properties %}<td>{{ p.bathrooms or "—" }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td>m²</td>
+        {% for p in properties %}<td>{% if p.area_m2 %}{{ p.area_m2 | round(0) | int }}{% else %}—{% endif %}</td>{% endfor %}
+      </tr>
+      {% if compare_txn != 'arriendo' %}
+      <tr>
+        <td>Valorización est.</td>
+        {% for p in properties %}
+        <td class="val-cell">{{ "%.1f"|format(p.valorization_pct or 0) }}% / año</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+      <tr>
+        <td>{% if compare_txn == 'arriendo' %}Calificación{% else %}Score IA{% endif %}</td>
+        {% for p in properties %}
+        <td class="score-cell">{{ p.score or "—" }} — {{ p.score_label or "" }}</td>
+        {% endfor %}
+      </tr>
+      <tr class="suggestion-row">
+        <td>Sugerencia</td>
+        {% for p in properties %}
+        <td><p class="compare-tip">{{ p.compare_tip }}</p></td>
+        {% endfor %}
+      </tr>
     </tbody>
   </table>
 </div>
+
+<div class="compare-links">
+  {% for p in properties %}
+  <a href="{{ p.original_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Ver en {{ p.portal }}</a>
+  {% endfor %}
+</div>
 {% else %}
-<div class="empty-state card"><p>Busca propiedades y compara por ID.</p></div>
+<div class="empty-state card">
+  <p>Agrega hasta {{ compare_limit }} enlaces de anuncios y pulsa <strong>Comparar</strong>.</p>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    const list = document.getElementById("compare-url-list");
+    const addBtn = document.getElementById("compare-add-url");
+    const hint = document.getElementById("compare-url-hint");
+    if (!list || !addBtn) return;
+
+    const max = parseInt(list.dataset.max || "2", 10);
+    const placeholder =
+      "https://www.fincaraiz.com.co/... o https://www.metrocuadrado.com/...";
+
+    function rowCount() {
+      return list.querySelectorAll(".compare-url-row").length;
+    }
+
+    function updateUi() {
+      const n = rowCount();
+      addBtn.disabled = n >= max;
+      addBtn.hidden = n >= max;
+      if (hint) {
+        hint.textContent =
+          n >= max
+            ? `Máximo ${max} enlace${max === 1 ? "" : "s"} en tu plan.`
+            : `${n} de ${max} campos`;
+      }
+      list.querySelectorAll(".compare-url-row").forEach((row, i) => {
+        const label = row.querySelector("label");
+        const input = row.querySelector("input");
+        const num = i + 1;
+        if (label) label.textContent = "Enlace " + num;
+        if (input) {
+          input.id = "compare-url-" + num;
+          label?.setAttribute("for", input.id);
+        }
+      });
+    }
+
+    addBtn.addEventListener("click", () => {
+      if (rowCount() >= max) return;
+      const num = rowCount() + 1;
+      const row = document.createElement("div");
+      row.className = "compare-url-row";
+      row.innerHTML =
+        '<label for="compare-url-' +
+        num +
+        '">Enlace ' +
+        num +
+        '</label><input type="text" inputmode="url" id="compare-url-' +
+        num +
+        '" name="urls" placeholder="' +
+        placeholder +
+        '" autocomplete="off">';
+      list.appendChild(row);
+      row.querySelector("input")?.focus();
+      updateUi();
+    });
+
+    updateUi();
+  })();
+</script>
+{% if properties %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const compareMarkers = {{ compare_markers | safe }};
+  const mapEl = document.getElementById("compare-map");
+  if (mapEl && compareMarkers.length) {
+    const map = L.map("compare-map").setView([4.65, -74.06], 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap"
+    }).addTo(map);
+    const bounds = [];
+    compareMarkers.forEach((m) => {
+      const color = m.color || "#2563eb";
+      const marker = L.circleMarker([m.lat, m.lng], {
+        radius: 11,
+        color: "#fff",
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.9
+      }).addTo(map);
+      const priceTxt = m.price
+        ? "$" + Number(m.price).toLocaleString("es-CO")
+        : "Precio en portal";
+      const detailUrl = m.id ? `/propiedad/${m.id}` : (m.original_url || "#");
+      marker.bindPopup(
+        `<b>#${m.index} ${m.title}</b><br>${m.neighborhood}<br>${priceTxt}<br>Score: ${m.score || "—"}<br><a href="${detailUrl}">Ver detalle</a>`
+      );
+      marker.bindTooltip(`#${m.index}`, { permanent: false });
+      bounds.push([m.lat, m.lng]);
+    });
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 14);
+    } else {
+      map.fitBounds(bounds, { padding: [48, 48] });
+    }
+  }
+</script>
 {% endif %}
 {% endblock %}

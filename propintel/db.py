@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
     favorite_zones TEXT DEFAULT '[]',
     property_type_pref TEXT,
     goal TEXT,
+    home_zone TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -101,9 +102,20 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS comparisons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    property_ids TEXT NOT NULL DEFAULT '[]',
+    summary TEXT,
+    item_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_properties_portal ON properties(portal);
 CREATE INDEX IF NOT EXISTS idx_properties_neighborhood ON properties(neighborhood);
 CREATE INDEX IF NOT EXISTS idx_searches_user_date ON searches(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_comparisons_user_date ON comparisons(user_id, created_at);
 """
 
 
@@ -114,6 +126,12 @@ def utc_now() -> str:
 _db_initialized = False
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+    if "home_zone" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN home_zone TEXT")
+
+
 def init_db() -> None:
     global _db_initialized
     if _db_initialized:
@@ -122,6 +140,7 @@ def init_db() -> None:
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
         _db_initialized = True
     finally:

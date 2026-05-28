@@ -40,12 +40,20 @@ ZONE_SCRAPE_URLS = {
     ],
 }
 
+TARGET_URL_RENT = TARGET_URL.replace("/venta/", "/arriendo/")
+
+ZONE_SCRAPE_URLS_RENT: dict[str, list[str]] = {
+    zone: [u.replace("/venta/", "/arriendo/") for u in urls]
+    for zone, urls in ZONE_SCRAPE_URLS.items()
+}
+
 
 @dataclass
 class SearchCriteria:
     bedrooms: Optional[int] = None
     zones: List[str] = field(default_factory=list)
     property_type: Optional[str] = None  # apartamento | casa
+    transaction_type: str = "compra"  # compra | arriendo
     max_results: int = 5
 
 
@@ -136,14 +144,42 @@ def listing_matches_type(listing: Listing, property_type: str) -> bool:
     if property_type == "apartamento":
         if "-casa-en-venta-" in url and "apartamento" not in url:
             return False
+        if "-casa-en-arriendo-" in url and "apartamento" not in url:
+            return False
         return "apartamento" in url or "apartamento" in blob or "/proyectos-vivienda/" in url
     if property_type == "casa":
         return "casa" in url or "casa" in blob
     return True
 
 
+def listing_matches_transaction(listing: Listing, transaction_type: str) -> bool:
+    if not transaction_type or transaction_type == "compra":
+        blob = listing_blob(listing)
+        if "arriendo" in listing.listing_url.lower() or "alquiler" in listing.listing_url.lower():
+            return False
+        if re.search(r"\barriendo\b|\balquiler\b", blob):
+            return False
+        return True
+    blob = listing_blob(listing)
+    url = listing.listing_url.lower()
+    if (
+        "arriendo" in url
+        or "alquiler" in url
+        or "en-arriendo" in url
+        or "en-alquiler" in url
+    ):
+        return True
+    return re.search(
+        r"en\s+arriendo|en\s+alquiler|\barriendo\b|\balquiler\b|canon\s+de\s+arrend",
+        blob,
+        re.IGNORECASE,
+    ) is not None
+
+
 def listing_matches(listing: Listing, criteria: SearchCriteria) -> bool:
     if criteria.property_type and not listing_matches_type(listing, criteria.property_type):
+        return False
+    if not listing_matches_transaction(listing, criteria.transaction_type):
         return False
     if criteria.bedrooms is not None and not listing_matches_bedrooms(listing, criteria.bedrooms):
         return False
@@ -153,11 +189,14 @@ def listing_matches(listing: Listing, criteria: SearchCriteria) -> bool:
 
 
 def scrape_urls_for_criteria(criteria: SearchCriteria) -> List[str]:
+    rent = criteria.transaction_type == "arriendo"
+    zone_map = ZONE_SCRAPE_URLS_RENT if rent else ZONE_SCRAPE_URLS
+    default_url = TARGET_URL_RENT if rent else TARGET_URL
     if not criteria.zones:
-        return [TARGET_URL]
+        return [default_url]
     urls: List[str] = []
     for zone in criteria.zones:
-        urls.extend(ZONE_SCRAPE_URLS.get(zone, [TARGET_URL]))
+        urls.extend(zone_map.get(zone, [default_url]))
     urls = list(dict.fromkeys(urls))
     try:
         from scrapers.browser_utils import is_low_memory
@@ -214,12 +253,20 @@ def search_listings(
             item
             for item in collected
             if listing_matches_zone(item, criteria.zones)
+            and listing_matches_transaction(item, criteria.transaction_type)
             and (not criteria.property_type or listing_matches_type(item, criteria.property_type))
         ]
         if zone_only:
             return zone_only[: criteria.max_results]
 
-    if collected:
+    if collected and criteria.transaction_type == "arriendo":
+        rent_only = [
+            item for item in collected if listing_matches_transaction(item, "arriendo")
+        ]
+        if rent_only:
+            return rent_only[: criteria.max_results]
+
+    if collected and criteria.transaction_type != "arriendo":
         return collected[: criteria.max_results]
 
     return []

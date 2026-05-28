@@ -119,6 +119,7 @@ def update_user_profile(
     favorite_zones: Optional[list[str]] = None,
     property_type_pref: Optional[str] = None,
     goal: Optional[str] = None,
+    home_zone: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     user = get_user_by_id(user_id)
     if not user:
@@ -131,7 +132,8 @@ def update_user_profile(
                 budget = COALESCE(?, budget),
                 favorite_zones = COALESCE(?, favorite_zones),
                 property_type_pref = COALESCE(?, property_type_pref),
-                goal = COALESCE(?, goal)
+                goal = COALESCE(?, goal),
+                home_zone = ?
             WHERE id = ?
             """,
             (
@@ -140,6 +142,7 @@ def update_user_profile(
                 json.dumps(favorite_zones) if favorite_zones is not None else None,
                 property_type_pref,
                 goal,
+                (home_zone or "").strip() or None,
                 user_id,
             ),
         )

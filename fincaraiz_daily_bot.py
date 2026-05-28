@@ -110,16 +110,45 @@ def is_property_listing_href(href: str) -> bool:
         return True
     if re.search(r"/casa-en-venta(?:-en)?-[^/]+/\d+$", lowered):
         return True
+    if re.search(r"/apartamento-en-arriendo(?:-en)?-[^/]+/\d+$", lowered):
+        return True
+    if re.search(r"/casa-en-arriendo(?:-en)?-[^/]+/\d+$", lowered):
+        return True
+    if re.search(r"/apartamento-en-alquiler(?:-en)?-[^/]+/\d+$", lowered):
+        return True
+    if re.search(r"/casa-en-alquiler(?:-en)?-[^/]+/\d+$", lowered):
+        return True
     if re.search(r"/proyectos-vivienda/[^/]+/\d+$", lowered):
         return "bogota" in lowered or "bogot" in lowered
     return False
 
 
-LISTING_LINK_SELECTOR = (
+LISTING_LINK_SELECTOR_VENTA = (
     "a[href*='/apartamento-en-venta'], "
     "a[href*='/casa-en-venta'], "
     "a[href*='/proyectos-vivienda/']"
 )
+LISTING_LINK_SELECTOR_ARRIENDO = (
+    "a[href*='/apartamento-en-arriendo'], "
+    "a[href*='/casa-en-arriendo'], "
+    "a[href*='/apartamento-en-alquiler'], "
+    "a[href*='/casa-en-alquiler']"
+)
+LISTING_LINK_SELECTOR = f"{LISTING_LINK_SELECTOR_VENTA}, {LISTING_LINK_SELECTOR_ARRIENDO}"
+
+
+def listing_link_selector_for_page_url(page_url: str) -> str:
+    lowered = (page_url or "").lower()
+    if "/arriendo/" in lowered or "/alquiler/" in lowered:
+        return LISTING_LINK_SELECTOR_ARRIENDO
+    return LISTING_LINK_SELECTOR_VENTA
+
+
+def scrape_transaction_type(page_url: str) -> str:
+    lowered = (page_url or "").lower()
+    if "/arriendo/" in lowered or "/alquiler/" in lowered:
+        return "arriendo"
+    return "compra"
 
 
 def extract_card_text(anchor) -> str:
@@ -150,19 +179,22 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
     today = date.today().isoformat()
     all_rows: List[Listing] = []
 
+    page_txn = scrape_transaction_type(url)
+
     for page_idx in range(1, max_pages + 1):
         if max_listings is not None and len(all_rows) >= max_listings:
             break
         current_url = url if page_idx == 1 else f"{url}/pagina{page_idx}"
         goto_page(page, current_url)
+        link_selector = listing_link_selector_for_page_url(current_url)
 
-        if ensure_listing_cards(page, LISTING_LINK_SELECTOR) == 0:
+        if ensure_listing_cards(page, link_selector) == 0:
             continue
 
-        img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
-        price_map = collect_listing_prices(page, LISTING_LINK_SELECTOR)
+        img_map = collect_listing_images(page, link_selector, BASE_URL)
+        price_map = collect_listing_prices(page, link_selector)
 
-        link_nodes = page.locator(LISTING_LINK_SELECTOR)
+        link_nodes = page.locator(link_selector)
         seen: set[str] = set()
 
         for i in range(link_nodes.count()):
@@ -179,8 +211,9 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
 
             card_text = extract_card_text(anchor)
             title_match = re.search(
-                r"Apartamento en venta en [^$]+|Casa en venta en [^$]+|"
-                r"[\w\s]+, apartamentos? en venta en [^$]+",
+                r"Apartamento en (?:venta|arriendo|alquiler) en [^$]+|"
+                r"Casa en (?:venta|arriendo|alquiler) en [^$]+|"
+                r"[\w\s]+, apartamentos? en (?:venta|arriendo|alquiler) en [^$]+",
                 card_text,
                 re.IGNORECASE,
             )
@@ -191,7 +224,11 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
             else:
                 title = card_text[:120]
             price_raw, price_value = lookup_price(
-                price_map, listing_url, anchor=anchor, card_text=card_text
+                price_map,
+                listing_url,
+                anchor=anchor,
+                card_text=card_text,
+                transaction_type=page_txn,
             )
             image_url = lookup_image(img_map, listing_url, BASE_URL)
             if not image_url:

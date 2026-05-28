@@ -4,7 +4,11 @@
 <section class="page-header">
   <h1>Resultados</h1>
   <p class="muted">{{ criteria_summary }} · {{ properties|length }} inmuebles · hasta 5 por portal</p>
-  <a href="/buscar" class="link">← Nueva búsqueda</a>
+  <div class="results-nav-links">
+    <a href="/" class="link">← Nueva consulta</a>
+    <a href="/inicio" class="link">Tu panel</a>
+    <a href="/buscar" class="link">Búsqueda avanzada</a>
+  </div>
 </section>
 
 {% if portal_errors.get('fincaraiz') %}
@@ -48,7 +52,7 @@
   {% endif %}
 
   <div class="compare-bar">
-    <p>Comparar: <code>/comparar?ids=1,2,3</code></p>
+    <p>Comparar en <a href="/comparar">Comparador</a> (pega URLs o usa <code>?ids=1,2</code>)</p>
   </div>
 {% else %}
 <div class="empty-state card">

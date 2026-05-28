@@ -1,101 +1,297 @@
 {% extends "base.html" %}
 {% block title %}Buscar — Habitta ia{% endblock %}
 {% block content %}
-<section class="page-header">
-  <h1>Buscador inteligente</h1>
-  <p class="muted">Finca Raíz + Metrocuadrado · Bogotá · análisis en ~30–90 s</p>
-</section>
+<div class="search-page">
+  <header class="search-hero">
+    <p class="search-hero-badge">Bogotá · Finca Raíz + Metrocuadrado</p>
+    <h1>Buscador inteligente</h1>
+    <p class="search-hero-lead">
+      Define tus criterios y revisamos el mercado en Finca Raíz y Metrocuadrado con score de inversión y valorización por zona.
+    </p>
+    <ol class="search-hero-steps">
+      <li><span aria-hidden="true">1</span> Define filtros</li>
+      <li><span aria-hidden="true">2</span> Análisis con IA</li>
+      <li><span aria-hidden="true">3</span> Resultados ordenados</li>
+    </ol>
+  </header>
 
-{% if error %}
-<div class="alert alert-error">{{ error }}</div>
-{% if show_premium_cta %}<a href="/premium" class="btn btn-primary">Activar Premium</a>{% endif %}
-{% if show_login_cta %}<a href="/auth/register" class="btn btn-primary">Crear cuenta gratis</a>{% endif %}
-{% endif %}
-
-{% if not is_premium and user %}
-<p class="notice">Plan gratuito: {{ 2 }} búsquedas/día · 5 favoritos máx.</p>
-{% endif %}
-
-<form class="search-form card" method="post" action="/buscar" id="search-form">
-  <div class="form-row">
-    <label>Operación</label>
-    <div class="chip-group">
-      <label class="chip"><input type="radio" name="transaction_type" value="compra" checked> Compra</label>
-      <label class="chip muted" title="Próximamente"><input type="radio" name="transaction_type" value="arriendo" disabled> Arriendo (próximamente)</label>
-    </div>
+  {% if error %}
+  <div class="search-alert alert alert-error" role="alert">
+    <strong>No pudimos buscar</strong>
+    <p>{{ error }}</p>
+    {% if show_premium_cta %}<a href="/premium" class="btn btn-primary btn-sm">Ver Premium</a>{% endif %}
+    {% if show_login_cta %}<a href="/auth/register" class="btn btn-primary btn-sm">Crear cuenta gratis</a>{% endif %}
   </div>
+  {% endif %}
 
-  <div class="form-row">
-    <label>Tipo</label>
-    <div class="chip-group">
-      <label class="chip"><input type="radio" name="property_type" value="apartamento" checked> Apartamento</label>
-      <label class="chip"><input type="radio" name="property_type" value="casa"> Casa</label>
+  {% if not is_premium and user %}
+  <div class="search-plan-banner" role="status">
+    <span class="search-plan-tag">Gratis</span>
+    <div>
+      <strong>Plan gratuito</strong>
+      <p>Hasta 2 búsquedas por día y 5 favoritos guardados.</p>
     </div>
+    <a href="/premium" class="btn btn-ghost btn-sm">Ver Premium</a>
   </div>
+  {% endif %}
 
-  <div class="form-grid">
-    <div class="field">
-      <label for="price_min">Precio mínimo (COP)</label>
-      <input type="number" id="price_min" name="price_min" step="1000000" placeholder="200000000">
-    </div>
-    <div class="field">
-      <label for="price_max">Precio máximo (COP)</label>
-      <input type="number" id="price_max" name="price_max" step="1000000" placeholder="800000000">
-    </div>
-    <div class="field">
-      <label for="bedrooms">Habitaciones</label>
-      <input type="number" id="bedrooms" name="bedrooms" min="1" max="10">
-    </div>
-    <div class="field">
-      <label for="bathrooms">Baños mín.</label>
-      <input type="number" id="bathrooms" name="bathrooms" min="1" max="10">
-    </div>
-    <div class="field">
-      <label for="parking">Parqueaderos mín.</label>
-      <input type="number" id="parking" name="parking" min="0" max="5">
-    </div>
-    <div class="field">
-      <label for="stratum">Estrato</label>
-      <select id="stratum" name="stratum">
-        <option value="">Cualquiera</option>
-        {% for s in range(1, 7) %}
-        <option value="{{ s }}">{{ s }}</option>
+  <form class="search-panel" method="post" action="/buscar" id="search-form">
+    <section class="search-panel-section">
+      <div class="search-section-head">
+        <span class="search-section-num" aria-hidden="true">1</span>
+        <div>
+          <h2>Tipo de inmueble</h2>
+          <p class="muted tiny">Operación y categoría de la propiedad</p>
+        </div>
+      </div>
+
+      <div class="search-field-group">
+        <span class="search-field-label">Operación</span>
+        <div class="pill-row" role="group" aria-label="Operación">
+          <label class="pill-option">
+            <input type="radio" name="transaction_type" value="compra" checked>
+            <span>Compra</span>
+          </label>
+          <label class="pill-option">
+            <input type="radio" name="transaction_type" value="arriendo">
+            <span>Arriendo</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="search-field-group">
+        <span class="search-field-label">Tipo</span>
+        <div class="pill-row" role="group" aria-label="Tipo de propiedad">
+          <label class="pill-option">
+            <input type="radio" name="property_type" value="apartamento" checked>
+            <span>Apartamento</span>
+          </label>
+          <label class="pill-option">
+            <input type="radio" name="property_type" value="casa">
+            <span>Casa</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="search-panel-section">
+      <div class="search-section-head">
+        <span class="search-section-num" aria-hidden="true">2</span>
+        <div>
+          <h2>Presupuesto y espacios</h2>
+          <p class="muted tiny">Campos opcionales si no tienes un rango definido</p>
+        </div>
+      </div>
+
+      <div class="search-price-row">
+        <div class="field">
+          <label for="price_min">Precio mínimo</label>
+          <div class="input-with-prefix">
+            <span class="input-prefix">$</span>
+            <input type="text" id="price_min" name="price_min" class="price-cop-input" placeholder="200.000.000" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label for="price_max">Precio máximo</label>
+          <div class="input-with-prefix">
+            <span class="input-prefix">$</span>
+            <input type="text" id="price_max" name="price_max" class="price-cop-input" placeholder="800.000.000" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+      </div>
+
+      <div class="search-quick-presets" aria-label="Rangos de precio sugeridos">
+        <span class="muted tiny">Rangos frecuentes:</span>
+        <button type="button" class="preset-chip preset-compra" data-min="200000000" data-max="400000000">$200M – $400M</button>
+        <button type="button" class="preset-chip preset-compra" data-min="400000000" data-max="700000000">$400M – $700M</button>
+        <button type="button" class="preset-chip preset-compra" data-min="700000000" data-max="">+$700M</button>
+        <button type="button" class="preset-chip preset-arriendo" data-min="1500000" data-max="2500000" hidden>$1,5M – $2,5M</button>
+        <button type="button" class="preset-chip preset-arriendo" data-min="2500000" data-max="4000000" hidden>$2,5M – $4M</button>
+        <button type="button" class="preset-chip preset-arriendo" data-min="4000000" data-max="" hidden>+$4M / mes</button>
+      </div>
+
+      <div class="search-rooms-row">
+        <div class="field">
+          <label for="bedrooms">Habitaciones</label>
+          <select id="bedrooms" name="bedrooms">
+            <option value="">Cualquiera</option>
+            {% for n in range(1, 6) %}
+            <option value="{{ n }}">{{ n }}+</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="bathrooms">Baños mín.</label>
+          <select id="bathrooms" name="bathrooms">
+            <option value="">Cualquiera</option>
+            {% for n in range(1, 5) %}
+            <option value="{{ n }}">{{ n }}+</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="search-panel-section">
+      <div class="search-section-head">
+        <span class="search-section-num" aria-hidden="true">3</span>
+        <div>
+          <h2>Barrios en Bogotá</h2>
+          <p class="muted tiny">Puedes elegir uno o varios</p>
+        </div>
+      </div>
+      <div class="zone-pills">
+        {% for zone in zones %}
+        <label class="zone-pill">
+          <input type="checkbox" name="zones" value="{{ zone }}">
+          <span>{{ zone | capitalize }}</span>
+        </label>
         {% endfor %}
-      </select>
+      </div>
+    </section>
+
+    <section class="search-panel-section search-panel-section--portals">
+      <div class="search-section-head">
+        <span class="search-section-num" aria-hidden="true">4</span>
+        <div>
+          <h2>Fuentes de búsqueda</h2>
+          <p class="muted tiny">Portales que consultamos</p>
+        </div>
+      </div>
+      <div class="portal-picks">
+        <label class="portal-pick portal-pick--fr">
+          <input type="checkbox" name="portal_fincaraiz" value="1" checked>
+          <span class="portal-pick-dot"></span>
+          <span class="portal-pick-text">
+            <strong>Finca Raíz</strong>
+            <small>fincaraiz.com.co</small>
+          </span>
+        </label>
+        <label class="portal-pick portal-pick--mc">
+          <input type="checkbox" name="portal_metrocuadrado" value="1" checked>
+          <span class="portal-pick-dot"></span>
+          <span class="portal-pick-text">
+            <strong>Metrocuadrado</strong>
+            <small>metrocuadrado.com</small>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <details class="search-more-filters">
+      <summary>
+        <span>Más filtros</span>
+        <span class="muted tiny">Parqueadero y estrato</span>
+      </summary>
+      <div class="search-more-inner">
+        <div class="search-rooms-row">
+          <div class="field">
+            <label for="parking">Parqueaderos mín.</label>
+            <select id="parking" name="parking">
+              <option value="">Cualquiera</option>
+              {% for n in range(0, 4) %}
+              <option value="{{ n }}">{{ n }}+</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="stratum">Estrato</label>
+            <select id="stratum" name="stratum">
+              <option value="">Cualquiera</option>
+              {% for s in range(1, 7) %}
+              <option value="{{ s }}">Estrato {{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="search-submit-block">
+      <button type="submit" class="btn btn-primary btn-search-cta" id="submit-btn">
+        Iniciar búsqueda
+      </button>
     </div>
-  </div>
+  </form>
+</div>
 
-  <fieldset class="field">
-    <legend>Barrios</legend>
-    <div class="zone-grid">
-      {% for zone in zones %}
-      <label class="checkbox"><input type="checkbox" name="zones" value="{{ zone }}"> {{ zone | capitalize }}</label>
-      {% endfor %}
-    </div>
-  </fieldset>
-
-  <fieldset class="field">
-    <legend>Portales</legend>
-    <label class="checkbox"><input type="checkbox" name="portal_fincaraiz" value="1" checked> Finca Raíz</label>
-    <label class="checkbox"><input type="checkbox" name="portal_metrocuadrado" value="1" checked> Metrocuadrado</label>
-  </fieldset>
-
-  <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Buscar con IA</button>
-</form>
-
-<div id="loading-overlay" class="loading-overlay hidden">
-  <div class="loading-box">
+<div id="loading-overlay" class="loading-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="loading-title">
+  <div class="loading-box loading-box--search">
     <div class="spinner"></div>
-    <p>Analizando mercado…</p>
-    <span class="muted">Suele tardar 10–25 segundos</span>
+    <p id="loading-title"><strong>Búsqueda en curso</strong></p>
+    <p class="muted">Consultando los portales seleccionados</p>
+    <ul class="loading-steps">
+      <li class="loading-step-active">Recopilando anuncios</li>
+      <li>Calculando score de inversión</li>
+      <li>Organizando resultados</li>
+    </ul>
   </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
+  function formatCopDigits(digits) {
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
+  function setCopPriceValue(input, raw) {
+    if (!input) return;
+    const digits = String(raw || "").replace(/\D/g, "").slice(0, 12);
+    input.value = digits ? formatCopDigits(digits) : "";
+  }
+
+  document.querySelectorAll(".price-cop-input").forEach((input) => {
+    input.addEventListener("input", () => {
+      const start = input.selectionStart;
+      const before = input.value;
+      const digits = before.replace(/\D/g, "").slice(0, 12);
+      input.value = digits ? formatCopDigits(digits) : "";
+      const diff = input.value.length - before.length;
+      const pos = Math.max(0, (start ?? input.value.length) + diff);
+      try {
+        input.setSelectionRange(pos, pos);
+      } catch (e) {
+        /* ignore */
+      }
+    });
+  });
+
   document.getElementById("search-form")?.addEventListener("submit", () => {
+    document.querySelectorAll(".price-cop-input").forEach((input) => {
+      input.value = input.value.replace(/\D/g, "");
+    });
     document.getElementById("loading-overlay")?.classList.remove("hidden");
-    document.getElementById("submit-btn").disabled = true;
+    const btn = document.getElementById("submit-btn");
+    if (btn) btn.disabled = true;
+  });
+
+  function updatePricePresets() {
+    const rent = document.querySelector('input[name="transaction_type"]:checked')?.value === "arriendo";
+    document.querySelectorAll(".preset-compra").forEach((el) => { el.hidden = rent; });
+    document.querySelectorAll(".preset-arriendo").forEach((el) => { el.hidden = !rent; });
+    document.querySelectorAll(".preset-chip").forEach((b) => b.classList.remove("is-active"));
+    const minLbl = document.querySelector('label[for="price_min"]');
+    const maxLbl = document.querySelector('label[for="price_max"]');
+    const minIn = document.getElementById("price_min");
+    const maxIn = document.getElementById("price_max");
+    if (minLbl) minLbl.textContent = rent ? "Canon mínimo / mes" : "Precio mínimo";
+    if (maxLbl) maxLbl.textContent = rent ? "Canon máximo / mes" : "Precio máximo";
+    if (minIn) minIn.placeholder = rent ? "1.500.000" : "200.000.000";
+    if (maxIn) maxIn.placeholder = rent ? "4.000.000" : "800.000.000";
+  }
+  document.querySelectorAll('input[name="transaction_type"]').forEach((r) => {
+    r.addEventListener("change", updatePricePresets);
+  });
+  updatePricePresets();
+
+  document.querySelectorAll(".preset-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setCopPriceValue(document.getElementById("price_min"), btn.dataset.min);
+      setCopPriceValue(document.getElementById("price_max"), btn.dataset.max);
+      document.querySelectorAll(".preset-chip").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+    });
   });
 </script>
 {% endblock %}

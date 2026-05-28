@@ -33,9 +33,11 @@ def criteria_from_legacy(legacy) -> SearchCriteria:
 def to_legacy(criteria: SearchCriteria):
     from search_query import SearchCriteria as Legacy
 
-    return Legacy(
+    legacy = Legacy(
         bedrooms=criteria.bedrooms,
         zones=criteria.zones,
         property_type=criteria.property_type,
         max_results=criteria.max_results,
     )
+    legacy.transaction_type = criteria.transaction_type
+    return legacy

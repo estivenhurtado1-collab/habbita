@@ -36,6 +36,7 @@ from search_query import KNOWN_ZONES, SearchCriteria
 
 BASE_URL = "https://www.metrocuadrado.com"
 DEFAULT_URL = f"{BASE_URL}/apartamentos/venta/bogota/"
+DEFAULT_URL_RENT = f"{BASE_URL}/apartamentos/arriendo/bogota/"
 
 LISTING_LINK_SELECTOR = "a[href*='/inmueble/']"
 
@@ -50,6 +51,11 @@ ZONE_SCRAPE_URLS: dict[str, str] = {
     "kennedy": f"{BASE_URL}/apartamentos/venta/bogota/kennedy/",
     "modelia": f"{BASE_URL}/apartamentos/venta/bogota/modelia/",
     "engativa": f"{BASE_URL}/apartamentos/venta/bogota/engativa/",
+}
+
+ZONE_SCRAPE_URLS_RENT: Dict[str, str] = {
+    zone: url.replace("/venta/", "/arriendo/")
+    for zone, url in ZONE_SCRAPE_URLS.items()
 }
 
 # Ciudades enlazadas en footer que no son Bogotá
@@ -138,21 +144,23 @@ def extract_title_metro(card_text: str, href: str) -> str:
 
 def urls_for_criteria(criteria: SearchCriteria) -> List[str]:
     segment = "casas" if criteria.property_type == "casa" else "apartamentos"
+    op = "arriendo" if getattr(criteria, "transaction_type", "compra") == "arriendo" else "venta"
+    zone_map = ZONE_SCRAPE_URLS_RENT if op == "arriendo" else ZONE_SCRAPE_URLS
     if not criteria.zones:
         if segment == "casas":
-            return [f"{BASE_URL}/casas/venta/bogota/"]
-        return [DEFAULT_URL]
+            return [f"{BASE_URL}/casas/{op}/bogota/"]
+        return [DEFAULT_URL_RENT if op == "arriendo" else DEFAULT_URL]
 
     urls: List[str] = []
     for zone in criteria.zones:
-        base = ZONE_SCRAPE_URLS.get(zone)
+        base = zone_map.get(zone)
         if base:
             if segment == "casas":
                 urls.append(base.replace("/apartamentos/", "/casas/"))
             else:
                 urls.append(base)
         else:
-            urls.append(f"{BASE_URL}/{segment}/venta/bogota/{zone}/")
+            urls.append(f"{BASE_URL}/{segment}/{op}/bogota/{zone}/")
     return list(dict.fromkeys(urls))
 
 
@@ -185,6 +193,7 @@ def scroll_to_load_cards(page, rounds: int | None = None, min_links: int = 0) ->
 def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
     today = date.today().isoformat()
     rows: List[Listing] = []
+    page_txn = "arriendo" if "arriendo" in url.lower() or "alquiler" in url.lower() else "compra"
 
     goto_page(page, url)
     dismiss_cookie_banner(page)
@@ -215,7 +224,11 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
 
         card_text = extract_card_text(anchor)
         price_raw, price_value = lookup_price(
-            price_map, listing_url, anchor=anchor, card_text=card_text
+            price_map,
+            listing_url,
+            anchor=anchor,
+            card_text=card_text,
+            transaction_type=page_txn,
         )
         bedrooms = parse_bedrooms(card_text) or parse_bedrooms_from_url(href)
         bathrooms = parse_bathrooms(card_text) or parse_bathrooms_from_url(href)
@@ -259,12 +272,31 @@ def listing_matches_metro(listing: Listing, criteria: SearchCriteria) -> bool:
     blob = strip_accents(
         f"{listing.title} {listing.location} {listing.source_text} {listing.listing_url}".lower()
     )
+    rent = getattr(criteria, "transaction_type", "compra") == "arriendo"
+
+    if rent:
+        if (
+            "arriendo" not in url_lower
+            and "alquiler" not in url_lower
+            and not re.search(r"en\s+arriendo|en\s+alquiler|\barriendo\b", blob)
+        ):
+            return False
+        if "venta" in url_lower and "arriendo" not in url_lower and "alquiler" not in url_lower:
+            return False
+    elif "arriendo" in url_lower or "alquiler" in url_lower:
+        return False
 
     if criteria.property_type == "casa":
-        if "venta-casa" not in url_lower and "casa" not in blob:
+        if rent:
+            if "casa" not in url_lower and "casa" not in blob:
+                return False
+        elif "venta-casa" not in url_lower and "casa" not in blob:
             return False
-    if criteria.property_type == "apartamento" and "venta-casa" in url_lower:
-        return False
+    if criteria.property_type == "apartamento":
+        if not rent and "venta-casa" in url_lower:
+            return False
+        if rent and re.search(r"venta-casa|casa-en-arriendo", url_lower) and "apartamento" not in blob:
+            return False
 
     if criteria.bedrooms is not None:
         beds = listing.bedrooms or parse_bedrooms_from_url(listing.listing_url)
@@ -293,6 +325,7 @@ def search_listings(criteria: SearchCriteria, limit: int = 5, *, session=None) -
         bedrooms=criteria.bedrooms,
         zones=criteria.zones,
         property_type=criteria.property_type,
+        transaction_type=getattr(criteria, "transaction_type", "compra") or "compra",
         max_results=limit,
     )
 

@@ -9,6 +9,15 @@ from propintel.config import FREE_FAVORITES_MAX, FREE_SEARCHES_PER_DAY
 from propintel.db import connect, row_to_dict, utc_now
 
 
+def update_property_admin_fee(property_id: int, admin_fee: int) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE properties SET admin_fee = ?, updated_at = ? WHERE id = ?",
+            (admin_fee, utc_now(), property_id),
+        )
+        conn.commit()
+
+
 def upsert_property(data: dict[str, Any]) -> dict[str, Any]:
     now = utc_now()
     with connect() as conn:
@@ -25,7 +34,8 @@ def upsert_property(data: dict[str, Any]) -> dict[str, Any]:
                 UPDATE properties SET
                     title = ?, price = COALESCE(?, price), price_per_m2 = ?, neighborhood = ?,
                     area_m2 = ?, bedrooms = ?, bathrooms = ?, parking = ?,
-                    stratum = ?, score = ?, valorization_pct = ?,
+                    stratum = ?, admin_fee = COALESCE(?, admin_fee),
+                    score = ?, valorization_pct = ?,
                     analysis_text = ?, score_label = ?,
                     image_url = COALESCE(NULLIF(?, ''), image_url),
                     updated_at = ?, is_active = 1
@@ -41,6 +51,7 @@ def upsert_property(data: dict[str, Any]) -> dict[str, Any]:
                     data.get("bathrooms"),
                     data.get("parking"),
                     data.get("stratum"),
+                    data.get("admin_fee"),
                     data.get("score"),
                     data.get("valorization_pct"),
                     data.get("analysis_text"),
@@ -110,6 +121,24 @@ def get_property(prop_id: int) -> Optional[dict[str, Any]]:
     with connect() as conn:
         row = conn.execute(
             "SELECT * FROM properties WHERE id = ? AND is_active = 1", (prop_id,)
+        ).fetchone()
+    return row_to_dict(row)
+
+
+def get_property_by_url(url: str) -> Optional[dict[str, Any]]:
+    normalized = (url or "").strip().split("?")[0].rstrip("/")
+    if not normalized:
+        return None
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM properties
+            WHERE is_active = 1
+              AND (original_url = ? OR original_url LIKE ?)
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (normalized, f"{normalized}%"),
         ).fetchone()
     return row_to_dict(row)
 
@@ -208,6 +237,21 @@ def remove_favorite(user_id: int, property_id: int) -> None:
         conn.commit()
 
 
+def remove_favorites_bulk(user_id: int, property_ids: list[int]) -> int:
+    """Quita varios favoritos; devuelve cuántos se eliminaron."""
+    ids = [int(i) for i in property_ids if i]
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with connect() as conn:
+        cur = conn.execute(
+            f"DELETE FROM favorites WHERE user_id = ? AND property_id IN ({placeholders})",
+            [user_id, *ids],
+        )
+        conn.commit()
+        return cur.rowcount
+
+
 def list_favorites(user_id: int) -> List[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
@@ -257,6 +301,68 @@ def create_alert(user_id: int, alert_type: str, parameters: dict[str, Any]) -> N
             (user_id, alert_type, json.dumps(parameters), utc_now()),
         )
         conn.commit()
+
+
+def log_comparison(
+    user_id: int,
+    property_ids: List[int],
+    summary: str,
+) -> None:
+    ids = [int(i) for i in property_ids if i]
+    if not ids:
+        return
+    recent = list_comparison_history(user_id, 1)
+    if recent and recent[0].get("property_ids") == ids:
+        return
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO comparisons (user_id, property_ids, summary, item_count, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, json.dumps(ids), summary, len(ids), utc_now()),
+        )
+        conn.commit()
+
+
+def list_comparison_history(user_id: int, limit: int = 15) -> List[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, property_ids, summary, item_count, created_at
+            FROM comparisons
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+    out: List[dict[str, Any]] = []
+    for row in rows:
+        d = row_to_dict(row)
+        if not d:
+            continue
+        raw_ids = d.get("property_ids")
+        if isinstance(raw_ids, str):
+            try:
+                pids = [int(x) for x in json.loads(raw_ids or "[]")]
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pids = []
+        else:
+            pids = []
+        if not pids:
+            continue
+        out.append(
+            {
+                "id": d["id"],
+                "property_ids": pids,
+                "ids_param": ",".join(str(i) for i in pids),
+                "summary": d.get("summary") or f"{len(pids)} inmueble(s)",
+                "item_count": int(d.get("item_count") or len(pids)),
+                "created_at": d.get("created_at") or "",
+            }
+        )
+    return out
 
 
 def recent_searches(user_id: int, limit: int = 5) -> List[dict[str, Any]]:

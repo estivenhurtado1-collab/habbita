@@ -17,7 +17,9 @@
 
   <h1>{{ prop.title }}</h1>
   {% if prop.price %}
-  <p class="price-lg">{{ prop.price | format_cop }}</p>
+  <p class="price-lg">
+    {{ prop.price | format_cop }}{% if prop.transaction_type == 'arriendo' %} <span class="muted">/ mes</span>{% endif %}
+  </p>
   {% else %}
   <p class="price-lg muted">Consulta el precio actual en <a href="{{ prop.original_url }}" target="_blank" rel="noopener">{{ prop.portal }}</a></p>
   {% endif %}
@@ -33,13 +35,21 @@
   </ul>
 
   {% if prop.price_per_m2 %}
-  <p class="muted">Precio/m²: {{ prop.price_per_m2 | round(0) | int | format_cop }}</p>
+  <p class="muted">
+    {% if prop.transaction_type == 'arriendo' %}Canon/m²{% else %}Precio/m²{% endif %}:
+    {{ prop.price_per_m2 | round(0) | int | format_cop }}{% if prop.transaction_type == 'arriendo' %} / m²{% endif %}
+  </p>
+  {% endif %}
+  {% if prop.admin_fee %}
+  <p class="muted">Administración: {{ prop.admin_fee | format_cop }} / mes</p>
   {% endif %}
 
   <section class="card analysis-card">
     <h2>Análisis IA</h2>
     <p>{{ prop.analysis_text }}</p>
+    {% if prop.transaction_type != 'arriendo' %}
     <p class="val-tag positive">Valorización estimada zona: {{ "%.1f"|format(prop.valorization_pct or 0) }}% anual</p>
+    {% endif %}
   </section>
 
   {% if price_history|length > 1 and is_premium %}
@@ -62,10 +72,7 @@
       <button type="submit" class="btn btn-ghost">{% if is_fav %}Quitar favorito{% else %}Guardar favorito{% endif %}</button>
     </form>
     {% endif %}
-    {% if is_premium %}
-    <a href="/reporte/{{ prop.id }}/pdf" class="btn btn-ghost">Descargar PDF</a>
-    {% endif %}
-    <a href="/comparar?ids={{ prop.id }}" class="btn btn-ghost">Comparar</a>
+    <a href="/comparar?ids={{ prop.id }}" class="btn btn-ghost">Añadir al comparador</a>
   </div>
 </article>
 {% endblock %}
