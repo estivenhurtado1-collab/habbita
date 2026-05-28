@@ -30,6 +30,15 @@ from propintel.config import (  # noqa: E402
     RESULTS_LIMIT_FREE,
     RESULTS_LIMIT_PREMIUM,
     SECRET_KEY,
+    TRIAL_MODE,
+)
+from propintel.session_favorites import (  # noqa: E402
+    add_favorite_request,
+    fav_ids_for_request,
+    favorites_for_request,
+    is_fav_request,
+    remove_favorite_request,
+    remove_favorites_bulk_request,
 )
 from propintel.compare_service import (  # noqa: E402
     compare_from_urls,
@@ -223,11 +232,12 @@ def inc_guest_search(request: Request) -> None:
 
 
 def base_context(request: Request, **extra) -> dict[str, Any]:
-    user = get_session_user(request)
+    user = get_session_user(request) if not TRIAL_MODE else None
     ctx = {
         "request": request,
         "user": user,
-        "is_premium": bool(user and user.get("plan") == "premium"),
+        "trial_mode": TRIAL_MODE,
+        "is_premium": False if TRIAL_MODE else bool(user and user.get("plan") == "premium"),
         "premium_price": PREMIUM_PRICE_COP,
         "zones": ZONE_OPTIONS,
         "city": "Bogotá",
@@ -235,6 +245,15 @@ def base_context(request: Request, **extra) -> dict[str, Any]:
     }
     ctx.update(extra)
     return ctx
+
+
+def results_limit_for_request(request: Request) -> int:
+    if TRIAL_MODE:
+        return RESULTS_LIMIT_FREE
+    user = get_session_user(request)
+    if user and user.get("plan") == "premium":
+        return RESULTS_LIMIT_PREMIUM
+    return RESULTS_LIMIT_FREE
 
 
 def criteria_from_natural_query(text: str, max_results: int):
@@ -258,14 +277,13 @@ async def _render_search_results(
     user = get_session_user(request)
     properties, portal_errors = await asyncio.to_thread(search_and_store, criteria)
     results_by_portal = group_by_portal(properties)
-    if user:
-        log_search(user["id"], criteria.__dict__, len(properties))
-    else:
-        inc_guest_search(request)
+    if not TRIAL_MODE:
+        if user:
+            log_search(user["id"], criteria.__dict__, len(properties))
+        else:
+            inc_guest_search(request)
 
-    fav_ids = set()
-    if user:
-        fav_ids = {f["id"] for f in list_favorites(user["id"])}
+    fav_ids = fav_ids_for_request(request, user)
 
     return templates.TemplateResponse(
         request,
@@ -368,14 +386,11 @@ async def landing_page(request: Request) -> HTMLResponse:
 async def dashboard_page(request: Request) -> HTMLResponse:
     user = get_session_user(request)
     recs = list_recommendations(6)
-    recent = recent_searches(user["id"], 5) if user else []
-    home_favorites: list = []
-    home_map_marker_list: list = []
-    if user:
-        home_favorites = list_favorites(user["id"])
-        home_map_marker_list = markers_for_home_map(
-            home_favorites, user.get("home_zone")
-        )
+    recent = recent_searches(user["id"], 5) if user and not TRIAL_MODE else []
+    home_favorites = favorites_for_request(request, user)
+    home_map_marker_list = markers_for_home_map(
+        home_favorites, user.get("home_zone") if user else None
+    )
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -420,20 +435,19 @@ async def consultar_submit(
     if re.search(r"^\s*comparar\b", text.lower()):
         return RedirectResponse("/comparar", status_code=303)
 
-    user = get_session_user(request)
-    is_premium = user and user.get("plan") == "premium"
-    limit = RESULTS_LIMIT_PREMIUM if is_premium else RESULTS_LIMIT_FREE
+    limit = results_limit_for_request(request)
 
-    if user:
-        ok, msg = can_search(user)
-        if not ok:
-            return templates.TemplateResponse(
-                request,
-                "landing.html",
-                base_context(request, error=msg, show_premium_cta=True),
-            )
-    else:
-        if guest_search_count(request) >= FREE_SEARCHES_PER_DAY:
+    if not TRIAL_MODE:
+        user = get_session_user(request)
+        if user:
+            ok, msg = can_search(user)
+            if not ok:
+                return templates.TemplateResponse(
+                    request,
+                    "landing.html",
+                    base_context(request, error=msg, show_premium_cta=True),
+                )
+        elif guest_search_count(request) >= FREE_SEARCHES_PER_DAY:
             return templates.TemplateResponse(
                 request,
                 "landing.html",
@@ -476,19 +490,18 @@ async def search_submit(
     portal_metrocuadrado: Optional[str] = Form(None),
 ) -> HTMLResponse:
     user = get_session_user(request)
-    is_premium = user and user.get("plan") == "premium"
-    limit = RESULTS_LIMIT_PREMIUM if is_premium else RESULTS_LIMIT_FREE
+    limit = results_limit_for_request(request)
 
-    if user:
-        ok, msg = can_search(user)
-        if not ok:
-            return templates.TemplateResponse(
-                request,
-                "search.html",
-                base_context(request, error=msg, show_premium_cta=True),
-            )
-    else:
-        if guest_search_count(request) >= FREE_SEARCHES_PER_DAY:
+    if not TRIAL_MODE:
+        if user:
+            ok, msg = can_search(user)
+            if not ok:
+                return templates.TemplateResponse(
+                    request,
+                    "search.html",
+                    base_context(request, error=msg, show_premium_cta=True),
+                )
+        elif guest_search_count(request) >= FREE_SEARCHES_PER_DAY:
             return templates.TemplateResponse(
                 request,
                 "search.html",
@@ -543,7 +556,7 @@ async def property_detail(request: Request, prop_id: int) -> HTMLResponse:
         except Exception:
             pass
     user = get_session_user(request)
-    fav = is_favorite(user["id"], prop_id) if user else False
+    fav = is_fav_request(request, user, prop_id)
     with_history = []
     from propintel.db import connect
 
@@ -563,9 +576,7 @@ async def property_detail(request: Request, prop_id: int) -> HTMLResponse:
 @app.get("/favoritos", response_class=HTMLResponse)
 async def favorites_page(request: Request) -> HTMLResponse:
     user = get_session_user(request)
-    if not user:
-        return RedirectResponse("/auth/login?next=/favoritos", status_code=302)
-    favs = list_favorites(user["id"])
+    favs = favorites_for_request(request, user)
     fav_marker_list = markers_for_properties(favs) if favs else []
     return templates.TemplateResponse(
         request,
@@ -583,9 +594,7 @@ async def favorites_remove_bulk(
     request: Request, prop_ids: List[int] = Form(default=[])
 ) -> RedirectResponse:
     user = get_session_user(request)
-    if not user:
-        return RedirectResponse("/auth/login?next=/favoritos", status_code=302)
-    removed = remove_favorites_bulk(user["id"], prop_ids)
+    removed = remove_favorites_bulk_request(request, user, prop_ids)
     if removed:
         request.session["flash"] = (
             f"Se borró {removed} favorito." if removed == 1 else f"Se borraron {removed} favoritos."
@@ -596,9 +605,7 @@ async def favorites_remove_bulk(
 @app.post("/favoritos/{prop_id}")
 async def favorites_add(request: Request, prop_id: int) -> RedirectResponse:
     user = get_session_user(request)
-    if not user:
-        return RedirectResponse(f"/auth/login?next=/propiedad/{prop_id}", status_code=302)
-    ok, msg = add_favorite(user["id"], prop_id)
+    ok, msg = add_favorite_request(request, user, prop_id)
     request.session["flash"] = msg if ok else msg
     return RedirectResponse(f"/propiedad/{prop_id}", status_code=303)
 
@@ -606,13 +613,14 @@ async def favorites_add(request: Request, prop_id: int) -> RedirectResponse:
 @app.post("/favoritos/{prop_id}/quitar")
 async def favorites_remove(request: Request, prop_id: int) -> RedirectResponse:
     user = get_session_user(request)
-    if user:
-        remove_favorite(user["id"], prop_id)
+    remove_favorite_request(request, user, prop_id)
     return RedirectResponse("/favoritos", status_code=303)
 
 
 @app.get("/alertas", response_class=HTMLResponse)
 async def alerts_page(request: Request) -> HTMLResponse:
+    if TRIAL_MODE:
+        return RedirectResponse("/inicio", status_code=302)
     user = get_session_user(request)
     if not user:
         return RedirectResponse("/auth/login?next=/alertas", status_code=302)
@@ -640,6 +648,8 @@ async def alerts_create(
 
 
 def _compare_limit(request: Request) -> int:
+    if TRIAL_MODE:
+        return COMPARE_LIMIT_FREE
     user = get_session_user(request)
     is_premium = bool(user and user.get("plan") == "premium")
     return compare_limit_for_user(user, is_premium=is_premium)
@@ -841,6 +851,8 @@ async def map_page_redirect() -> RedirectResponse:
 
 @app.get("/perfil", response_class=HTMLResponse)
 async def profile_page(request: Request) -> HTMLResponse:
+    if TRIAL_MODE:
+        return RedirectResponse("/inicio", status_code=302)
     user = get_session_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -894,6 +906,8 @@ async def premium_demo(request: Request) -> RedirectResponse:
 
 @app.get("/auth/login", response_class=HTMLResponse)
 async def login_page(request: Request, next: str = "/inicio") -> HTMLResponse:
+    if TRIAL_MODE:
+        return RedirectResponse("/", status_code=302)
     return templates.TemplateResponse(
         request, "auth_login.html", base_context(request, next_url=next)
     )
@@ -919,6 +933,8 @@ async def login_submit(
 
 @app.get("/auth/register", response_class=HTMLResponse)
 async def register_page(request: Request) -> HTMLResponse:
+    if TRIAL_MODE:
+        return RedirectResponse("/", status_code=302)
     return templates.TemplateResponse(request, "auth_register.html", base_context(request))
 
 

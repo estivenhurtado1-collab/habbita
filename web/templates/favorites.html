@@ -8,7 +8,7 @@
 {% block content %}
 <section class="page-header">
   <h1>Favoritos</h1>
-  <p class="muted">{% if not is_premium %}Máximo 5 en plan gratuito{% else %}Ilimitados{% endif %}</p>
+  <p class="muted">{% if trial_mode %}Guardados en esta sesión del navegador{% elif not is_premium %}Máximo 5 en plan gratuito{% else %}Ilimitados{% endif %}</p>
 </section>
 
 {% if favorites %}

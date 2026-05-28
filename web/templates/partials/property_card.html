@@ -35,7 +35,7 @@
     <p class="analysis-snippet">{{ (p.analysis_text or "")[:120] }}{% if (p.analysis_text or "")|length > 120 %}…{% endif %}</p>
     <div class="card-actions">
       <a href="/propiedad/{{ p.id }}" class="btn btn-ghost btn-sm">Ver análisis</a>
-      {% if user and not hide_fav_button %}
+      {% if not hide_fav_button %}
       <form method="post" action="/favoritos/{{ p.id }}" class="inline-form">
         <button type="submit" class="btn btn-ghost btn-sm">{% if p.id in fav_ids %}★{% else %}♡{% endif %}</button>
       </form>

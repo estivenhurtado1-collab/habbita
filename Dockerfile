@@ -10,7 +10,8 @@ ENV PYTHONUNBUFFERED=1 \
     LOW_MEMORY=1 \
     SEARCH_SEQUENTIAL=1 \
     SEARCH_FAST=0 \
-    SEARCH_PORTAL_TIMEOUT=40
+    SEARCH_PORTAL_TIMEOUT=40 \
+    TRIAL_MODE=1
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \

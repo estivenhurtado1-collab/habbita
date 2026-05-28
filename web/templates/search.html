@@ -24,7 +24,7 @@
   </div>
   {% endif %}
 
-  {% if not is_premium and user %}
+  {% if not is_premium and user and not trial_mode %}
   <div class="search-plan-banner" role="status">
     <span class="search-plan-tag">Gratis</span>
     <div>

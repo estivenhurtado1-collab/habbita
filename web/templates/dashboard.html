@@ -75,11 +75,10 @@
 <section class="section home-map-section">
   <div class="section-head">
     <h2>Mapa de favoritos</h2>
-    {% if user %}<a href="/favoritos" class="link">Ver todos</a>{% endif %}
+    <a href="/favoritos" class="link">Ver todos</a>
   </div>
-  {% if user %}
   {% if home_map_has_markers %}
-  <p class="muted tiny">Tus inmuebles guardados{% if user.home_zone %} y dónde vives{% endif %} (ubicación aproximada por barrio).</p>
+  <p class="muted tiny">Tus inmuebles guardados (ubicación aproximada por barrio).</p>
   <div
     id="home-favorites-map"
     class="map-container compare-map"
@@ -88,9 +87,6 @@
   ></div>
   <script type="application/json" id="home-map-markers-data">{{ home_map_marker_list | tojson }}</script>
   <ul class="compare-map-legend home-map-legend">
-    {% if user.home_zone %}
-    <li><span class="legend-dot" style="background: #dc2626"></span> Donde vives — {{ user.home_zone | capitalize }}</li>
-    {% endif %}
     {% for p in home_favorites %}
     <li>
       <span class="legend-dot" style="background: {{ ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed'][loop.index0 % 5] }}"></span>
@@ -100,12 +96,8 @@
   </ul>
   {% else %}
   <div class="empty-state card">
-    <p>Guarda inmuebles en <a href="/favoritos">Favoritos</a> o indica <a href="/perfil">dónde vives</a> en tu perfil para ver el mapa.</p>
-  </div>
-  {% endif %}
-  {% else %}
-  <div class="empty-state card">
-    <p><a href="/auth/login">Inicia sesión</a> para ver tu mapa de favoritos y tu ubicación.</p>
+    <p>Guarda inmuebles con el botón ♡ en los resultados o en la ficha de cada propiedad.</p>
+    <a href="/" class="btn btn-primary btn-sm">Buscar ahora</a>
   </div>
   {% endif %}
 </section>

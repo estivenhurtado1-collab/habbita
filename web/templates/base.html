@@ -56,31 +56,33 @@
 
             <a href="/favoritos" class="nav-item {% if '/favoritos' in request.url.path %}active{% endif %}">Favoritos</a>
 
+            {% if not trial_mode %}
             {% if is_premium %}
-
             <span class="nav-badge premium">Premium</span>
-
             {% else %}
-
             <a href="/premium" class="nav-item nav-cta {% if '/premium' in request.url.path %}active{% endif %}">Premium</a>
-
+            {% endif %}
             {% endif %}
 
           </nav>
 
           <div class="topbar-actions">
 
-            {% if user %}
+            {% if user and not trial_mode %}
 
             <a href="/perfil" class="nav-item nav-user">{{ user.name }}</a>
 
             <a href="/auth/logout" class="nav-item muted">Salir</a>
 
-            {% else %}
+            {% elif not trial_mode %}
 
             <a href="/auth/login" class="btn btn-top-login btn-sm">Iniciar sesión</a>
 
             <a href="/auth/register" class="btn btn-top-register btn-sm">Registrarse</a>
+
+            {% else %}
+
+            <span class="nav-badge premium">Prueba gratis</span>
 
             {% endif %}
 

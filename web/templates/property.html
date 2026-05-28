@@ -61,17 +61,15 @@
       {% endfor %}
     </ul>
   </section>
-  {% elif not is_premium %}
+  {% elif not is_premium and not trial_mode %}
   <p class="notice"><a href="/premium">Premium</a> desbloquea historial de precios completo.</p>
   {% endif %}
 
   <div class="detail-actions">
     <a href="{{ prop.original_url }}" class="btn btn-primary" target="_blank" rel="noopener">Ver en {{ prop.portal }}</a>
-    {% if user %}
     <form method="post" action="/favoritos/{{ prop.id }}" class="inline-form">
       <button type="submit" class="btn btn-ghost">{% if is_fav %}Quitar favorito{% else %}Guardar favorito{% endif %}</button>
     </form>
-    {% endif %}
     <a href="/comparar?ids={{ prop.id }}" class="btn btn-ghost">Añadir al comparador</a>
   </div>
 </article>

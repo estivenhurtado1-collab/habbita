@@ -19,7 +19,14 @@ if ENVIRONMENT == "production" and SECRET_KEY.startswith("cambiar"):
 
 FREE_SEARCHES_PER_DAY = 2
 FREE_FAVORITES_MAX = 5
+SESSION_FAVORITES_MAX = 30
 PREMIUM_PRICE_COP = 30_000
+
+# Modo demo: sin registro, favoritos en sesión, sin límites de búsqueda (menos carga en DB)
+TRIAL_MODE = os.getenv(
+    "TRIAL_MODE",
+    "1" if ENVIRONMENT == "production" else "0",
+).lower() in ("1", "true", "yes")
 
 RESULTS_LIMIT_FREE = 10
 RESULTS_LIMIT_PREMIUM = 30

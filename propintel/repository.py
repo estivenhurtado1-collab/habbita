@@ -175,6 +175,10 @@ def count_searches_today(user_id: Optional[int]) -> int:
 
 
 def can_search(user: Optional[dict[str, Any]]) -> tuple[bool, str]:
+    from propintel.config import TRIAL_MODE
+
+    if TRIAL_MODE:
+        return True, ""
     if user and user.get("plan") == "premium":
         return True, ""
     count = count_searches_today(user["id"] if user else None)
