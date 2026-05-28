@@ -191,7 +191,13 @@ def _scrape_listings_on_page(page, url: str, max_pages: int, max_listings: int |
         if ensure_listing_cards(page, link_selector) == 0:
             continue
 
-        img_map = collect_listing_images(page, link_selector, BASE_URL)
+        from scrapers.browser_utils import is_low_memory
+
+        img_map = (
+            {}
+            if is_low_memory()
+            else collect_listing_images(page, link_selector, BASE_URL)
+        )
         price_map = collect_listing_prices(page, link_selector)
 
         link_nodes = page.locator(link_selector)

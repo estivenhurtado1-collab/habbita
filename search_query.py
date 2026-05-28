@@ -199,10 +199,11 @@ def scrape_urls_for_criteria(criteria: SearchCriteria) -> List[str]:
         urls.extend(zone_map.get(zone, [default_url]))
     urls = list(dict.fromkeys(urls))
     try:
-        from scrapers.browser_utils import is_low_memory
+        from scrapers.browser_utils import scrape_limits
 
-        if is_low_memory():
-            return urls[:1]
+        cap = scrape_limits()["max_zone_urls"]
+        if cap < len(urls):
+            return urls[:cap]
     except ImportError:
         pass
     return urls
@@ -215,18 +216,17 @@ def search_listings(
     session=None,
 ) -> List[Listing]:
     if pages_per_url is None:
-        try:
-            from scrapers.browser_utils import is_low_memory
+        pages_per_url = 1
 
-            pages_per_url = 1 if is_low_memory() else 2
-        except ImportError:
-            pages_per_url = 2
+    from scrapers.browser_utils import scrape_limits
+
+    limits = scrape_limits()
     urls = scrape_urls_for_criteria(criteria)
     collected: List[Listing] = []
     seen: Set[str] = set()
 
-    harvest_cap = max(criteria.max_results * 4, 20)
-    max_per_url = min(harvest_cap, 30)
+    harvest_cap = max(criteria.max_results * limits["harvest_multiplier"], limits["harvest_floor"])
+    max_per_url = min(harvest_cap, limits["max_per_url_cap"])
     for url in urls:
         for listing in scrape_listings(
             url,

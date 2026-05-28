@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import gc
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout, as_completed
 from typing import Any, Dict, List
 
@@ -10,6 +11,7 @@ from propintel.repository import upsert_property
 from scrapers.browser_utils import (
     ScrapeSession,
     portal_wall_timeout_sec,
+    scrape_limits,
     search_fast_enabled,
     search_parallel_enabled,
 )
@@ -149,6 +151,7 @@ def _run_portal_timed(
 def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, str]]:
     """Busca en cada portal y devuelve (lista plana, errores por portal)."""
     portal_limit = min(PER_PORTAL_LIMIT, criteria.max_results)
+    extra = scrape_limits()["portal_scrape_extra"]
     portal_criteria = SearchCriteria(
         bedrooms=criteria.bedrooms,
         bathrooms=criteria.bathrooms,
@@ -159,7 +162,7 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
         transaction_type=criteria.transaction_type,
         price_min=criteria.price_min,
         price_max=criteria.price_max,
-        max_results=portal_limit * 2,
+        max_results=min(portal_limit + extra, portal_limit * 2),
         portals=criteria.portals,
     )
 
@@ -212,6 +215,7 @@ def search_and_store(criteria: SearchCriteria) -> tuple[List[dict], Dict[str, st
                 ):
                     break
 
+    gc.collect()
     combined: List[dict] = []
     for portal in criteria.portals:
         combined.extend(by_portal.get(portal, []))

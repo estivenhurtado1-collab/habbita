@@ -10,7 +10,12 @@ from fincaraiz_daily_bot import (
     parse_bathrooms,
     parse_bedrooms,
 )
-from scrapers.browser_utils import ScrapeSession, brief_lazy_wait, goto_page
+from scrapers.browser_utils import (
+    ScrapeSession,
+    brief_lazy_wait,
+    goto_page,
+    is_low_memory,
+)
 from scrapers.images import is_listing_image, normalize_image_url
 from scrapers.admin_fee import parse_admin_fee, scrape_admin_fee_from_page
 from propintel.transaction import detect_transaction_type
@@ -96,7 +101,8 @@ def _scrape_on_page(page, url: str) -> Dict[str, Any]:
     portal = detect_portal(url)
     goto_page(page, url)
     brief_lazy_wait(page)
-    page.wait_for_timeout(600)
+    if not is_low_memory():
+        page.wait_for_timeout(600)
 
     text = _page_text(page)
     title = ""
@@ -118,12 +124,13 @@ def _scrape_on_page(page, url: str) -> Dict[str, Any]:
         title = match.group(0).strip()[:200] if match else "Inmueble"
 
     image_url = ""
-    try:
-        raw_img = page.evaluate(_JS_DETAIL_IMAGE)
-        if raw_img and is_listing_image(str(raw_img)):
-            image_url = normalize_image_url(str(raw_img))
-    except Exception:
-        pass
+    if not is_low_memory():
+        try:
+            raw_img = page.evaluate(_JS_DETAIL_IMAGE)
+            if raw_img and is_listing_image(str(raw_img)):
+                image_url = normalize_image_url(str(raw_img))
+        except Exception:
+            pass
     if not image_url:
         try:
             og = page.locator("meta[property='og:image']").first

@@ -29,6 +29,7 @@ from scrapers.browser_utils import (
     page_default_timeout,
     scroll_pause_ms,
     scroll_rounds_default,
+    scrape_limits,
 )
 from scrapers.images import collect_listing_images, extract_card_image, lookup_image
 from scrapers.prices import collect_listing_prices, lookup_price
@@ -204,7 +205,13 @@ def _scrape_url_on_page(page, url: str, max_listings: int) -> List[Listing]:
 
     if link_count < max_listings:
         scroll_to_load_cards(page, min_links=max_listings)
-    img_map = collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
+    from scrapers.browser_utils import is_low_memory
+
+    img_map = (
+        {}
+        if is_low_memory()
+        else collect_listing_images(page, LISTING_LINK_SELECTOR, BASE_URL)
+    )
     price_map = collect_listing_prices(page, LISTING_LINK_SELECTOR)
 
     link_nodes = page.locator(LISTING_LINK_SELECTOR)
@@ -333,11 +340,12 @@ def search_listings(criteria: SearchCriteria, limit: int = 5, *, session=None) -
     seen: Set[str] = set()
 
     urls = urls_for_criteria(effective)
-    if is_low_memory():
-        urls = urls[:1]
+    limits = scrape_limits()
+    if len(urls) > limits["max_zone_urls"]:
+        urls = urls[: limits["max_zone_urls"]]
 
-    max_per_url = min(limit + 10, 25)
-    harvest_cap = max_per_url * len(urls)
+    max_per_url = min(limit + limits["portal_scrape_extra"], limits["max_per_url_cap"])
+    harvest_cap = max_per_url * max(1, len(urls))
     for url in urls:
         for listing in scrape_url(url, max_listings=max_per_url, session=session):
             if listing.listing_url in seen:
